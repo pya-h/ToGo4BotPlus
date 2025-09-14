@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -235,7 +236,6 @@ func (togos TogoList) Update(chatID int64, terms []string) (string, error) {
 		return "", err
 	}
 	targetIdx := -1
-	// TODO: use simple version of FOR
 	for i := range togos {
 		if togos[i].Id == id {
 			targetIdx = i
@@ -255,14 +255,7 @@ func (togos TogoList) Update(chatID int64, terms []string) (string, error) {
 }
 
 func (togos TogoList) RemoveIndex(index int) TogoList {
-	count := len(togos)
-	if count-1 > index {
-		return append(togos[:index], togos[index+1:]...)
-	}
-	if count == 1 {
-		return make(TogoList, 0)
-	}
-	return append(togos[:index])
+	return slices.Delete(togos, index, index+1)
 }
 
 func (togos TogoList) Remove(ownerID int64, togoID uint64) (TogoList, error) {

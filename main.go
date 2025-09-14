@@ -74,10 +74,11 @@ const (
 )
 
 type CallbackData struct {
-	Action  UserAction  `json:"A"`
-	ID      int64       `json:"ID,omitempty"`
-	Data    interface{} `json:"D,omitempty"`
-	AllDays bool        `json:"AD,omitempty"`
+	Action      UserAction  `json:"A"`
+	ID          int64       `json:"ID,omitempty"`
+	Data        interface{} `json:"D,omitempty"`
+	AllDays     bool        `json:"AD,omitempty"`
+	JustUndones bool        `json:"JU,omitempty"`
 }
 
 func (callbackData CallbackData) Json() string {
@@ -97,7 +98,7 @@ func LoadCallbackData(jsonString string) (data CallbackData) {
 var env map[string]string
 
 // ---------------------- Telegram Response Related Functions ------------------------------
-func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool) (inlineKeyboard *tgbotapi.InlineKeyboardMarkup) {
+func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, justUndones bool) (inlineKeyboard *tgbotapi.InlineKeyboardMarkup) {
 	var (
 		count     = len(togos)
 		col       = 0
@@ -122,13 +123,16 @@ func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool) (i
 		}
 		status := ""
 		if togos[i].Progress >= 100 {
+			if justUndones {
+				continue
+			}
 			status = "✅ "
 		}
 		var togoTitle string = fmt.Sprint(status, togos[i].Title)
 		if len(togoTitle) >= MaximumInlineButtonTextLength {
 			togoTitle = fmt.Sprint(togoTitle[:MaximumInlineButtonTextLength], "...")
 		}
-		data := (CallbackData{Action: action, ID: int64(togos[i].Id), AllDays: allDays}).Json()
+		data := (CallbackData{Action: action, ID: int64(togos[i].Id), AllDays: allDays, JustUndones: justUndones}).Json()
 		menu.InlineKeyboard[row-1][col] = tgbotapi.InlineKeyboardButton{Text: togoTitle,
 			CallbackData: &data}
 		col = (col + 1) % MaximumNumberOfRowItems
@@ -141,8 +145,9 @@ func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 	return &tgbotapi.ReplyKeyboardMarkup{ResizeKeyboard: true,
 		OneTimeKeyboard: false,
 		Keyboard: [][]tgbotapi.KeyboardButton{{tgbotapi.KeyboardButton{Text: "#"}, tgbotapi.KeyboardButton{Text: "#  -"}, tgbotapi.KeyboardButton{Text: "#  +a"}, tgbotapi.KeyboardButton{Text: "#  -a"}},
-			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  +a"}},
-			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  a"}},
+			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  a"}},
+			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  a"}},
+			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  a"}},
 		}}
 }
 
@@ -200,13 +205,11 @@ func (telegramBot *TelegramBotAPI) InformAdmin(news string) {
 }
 
 func (telegramBot *TelegramBotAPI) NotifyRightNowTogos() {
-	ticker := time.NewTicker(1 * time.Minute) // everyminute check togos
-	// if a ogo is set on a time equal to now, send telegram notification to that user
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 	notified_about_curroption := false
 	notified_about_load_problem := false
 	for range ticker.C {
-		// Put your code here that you want to run every one minute
 		if togos, err := Togo.LoadEverybodysToday(); togos != nil {
 			notified_about_load_problem = false
 			if err != nil {
@@ -222,7 +225,6 @@ func (telegramBot *TelegramBotAPI) NotifyRightNowTogos() {
 
 			for _, togo := range togos {
 				if togo.Date.Get() == nextMinute.Get() {
-					// dates are equal if the string values are equal
 					response := TelegramResponse{TextMsg: togo.ToString(), TargetChatId: togo.OwnerId} // default method is sendMessage
 					telegramBot.SendTextMessage(response)
 				}
@@ -260,22 +262,13 @@ func main() {
 		}
 	}()
 
-	// Create a new UpdateConfig struct with an offset of 0. Offsets are used
-	// to make sure Telegram knows we've handled previous values and we don't
-	// need them repeated.
 	updateConfig := tgbotapi.NewUpdate(0)
-
-	// Tell Telegram we should wait up to 30 seconds on each request for an
-	// update. This way we can get information just as quickly as making many
-	// frequent requests without having to send nearly as many.
 	updateConfig.Timeout = 30
 
-	// Start polling Telegram for updates.
 	updates, err := bot.GetUpdatesChan(updateConfig)
 	if err != nil {
 		panic(err)
 	}
-	// Let's go through each update that we're getting from Telegram.
 
 	go bot.NotifyRightNowTogos() // run the scheduler that will check which togos are hapening right now, for each user
 	log.Println("configured.")
@@ -321,8 +314,6 @@ func main() {
 					results = togos.ToString()
 					if len(results) > 0 {
 						for i := range results {
-							// newBug: result its not sorted by time
-							// possible fix: collect all togos in a day as single message
 							if togos[i].Progress >= 100 {
 								if just_undones {
 									continue
@@ -368,7 +359,6 @@ func main() {
 						}
 					}
 				case "$":
-					//TODO: multiple seclect
 					var togos Togo.TogoList
 					var err error
 					// set or update a togo
@@ -387,13 +377,13 @@ func main() {
 					} else {
 						response.TextMsg = "You must provide the get identifier!"
 					}
-				// TODO: write Tick command
 				case "✅":
-					togos, err := Togo.Load(update.Message.Chat.ID, true)
+					allDays := i+1 < numOfTerms && (terms[i+1] == "a" || terms[i+1] == "-a")
+					togos, err := Togo.Load(update.Message.Chat.ID, !allDays)
 					if togos != nil {
 						if len(togos) >= 1 {
 							response.TextMsg = "Here are your togos for today:"
-							response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, false)
+							response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, allDays, terms[i+1] == "-a")
 						} else {
 							response.TextMsg = "No togos to tick!"
 						}
@@ -406,25 +396,24 @@ func main() {
 				case "❌":
 					var togos Togo.TogoList
 					var err error
-					all_days := i+1 < numOfTerms && terms[i+1] == "+a"
+					allDays := i+1 < numOfTerms && (terms[i+1] == "a" || terms[i+1] == "-a")
 
-					if togos, err = Togo.Load(update.Message.Chat.ID, !all_days); togos == nil {
-						log.Println(err)
+					if togos, err = Togo.Load(update.Message.Chat.ID, !allDays); togos == nil {
 						response.TextMsg = err.Error()
 						bot.SendTextMessage(response)
 					} else {
 						response.TextMsg = "Here are your Today's togos:"
-						if all_days {
+						if allDays {
 							response.TextMsg = "Here are your ALL togos:"
 						}
 						if err != nil {
 							response.TextMsg = fmt.Sprintln(response.TextMsg, "- - - - - - - - - - - - - - - - - - - - - - - -\n", err.Error())
 						}
-						response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, all_days)
+						response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, terms[i+1] == "-a")
 					}
 				case "/db":
-					if admin_id, err := strconv.Atoi(env["ADMIN_ID"]); err == nil && int64(admin_id) == response.TargetChatId {
-						msg := tgbotapi.NewDocumentUpload(int64(admin_id), "./togos.db")
+					if adminId, err := strconv.Atoi(env["ADMIN_ID"]); err == nil && int64(adminId) == response.TargetChatId {
+						msg := tgbotapi.NewDocumentUpload(int64(adminId), "./togos.db")
 						if _, err := bot.Send(msg); err != nil {
 							response.TextMsg = err.Error()
 						} else {
@@ -451,7 +440,6 @@ func main() {
 			togos, err = Togo.Load(response.TargetChatId, !callbackData.AllDays)
 			if togos != nil {
 				if err != nil {
-					log.Println(err)
 					response.TextMsg = err.Error()
 					bot.SendTextMessage(response)
 				}
@@ -459,7 +447,6 @@ func main() {
 				case TickTogo:
 					togo, err := togos.Get(uint64(callbackData.ID))
 					if err != nil {
-						log.Println(err)
 						response.TextMsg = err.Error()
 						bot.SendTextMessage(response)
 					} else {
@@ -469,7 +456,7 @@ func main() {
 							(*togo).Progress = 0
 						}
 						(*togo).Update(response.TargetChatId)
-						response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, false)
+						response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, false, false)
 						response.TextMsg = "✅ DONE! Now select the next togo you want to tick ..."
 					}
 				case RemoveTogo:
@@ -477,19 +464,17 @@ func main() {
 					if err == nil {
 						if len(togos) >= 1 {
 							response.TextMsg = "❌ DONE! Now select the next togo you want to REMOVE ..."
-							response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, callbackData.AllDays)
+							response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, callbackData.AllDays, false)
 						} else {
 							response.TextMsg = "❌ DONE! All removed."
 						}
 
 					} else {
-						log.Println(err)
 						response.TextMsg = err.Error()
 						bot.SendTextMessage(response)
 					}
 				}
 			} else {
-				log.Println(err)
 				response.TextMsg = err.Error()
 				bot.SendTextMessage(response)
 			}

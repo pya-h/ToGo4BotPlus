@@ -5,3 +5,4 @@ go.sum
 .env
 *.db
 tests
+ex
