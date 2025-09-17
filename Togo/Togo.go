@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,21 +126,21 @@ func (togo *Togo) setFields(terms []string) error {
 			// im++
 			i++
 			date := Today()
-			var delta int = 0
-			if _, err := fmt.Sscan(terms[i], &delta); err == nil {
+
+			if delta, err := strconv.Atoi(terms[i]); err == nil {
+				date = Date{date.AddDate(0, 0, delta)}
 				i++
 			}
-			date = Date{date.AddDate(0, 0, delta)}
 			temp := strings.Split(terms[i], ":")
 			hour := uint8(0)
 			min := uint8(0)
-			if _, err := fmt.Sscan(temp[0], &hour); err != nil {
+			if n, err := fmt.Sscan(temp[0], &hour); err != nil || n == 0 {
 				// means that user has entered @ Days
 				hour = uint8(0)
 			} else if hour >= uint8(24) {
 				return errors.New("Error at Togo:{" + togo.Title + "}: Hour part of the time must be between 0 and 23")
 			} else if len(temp) > 1 {
-				if _, err := fmt.Sscan(temp[1], &min); err != nil {
+				if n, err := fmt.Sscan(temp[1], &min); err != nil || n == 0 {
 					return errors.New("Error at Togo:{" + togo.Title + "}: Provided time is invalid:" + terms[i])
 				} else if min >= uint8(60) {
 					return errors.New("minute part must be between 0 and 59")

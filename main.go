@@ -47,6 +47,7 @@ func (telegramBotAPI *TelegramBotAPI) SendTextMessage(response TelegramResponse)
 	} else if response.ReplyMarkup != nil {
 		msg.ReplyMarkup = response.ReplyMarkup
 	}
+	msg.ParseMode = tgbotapi.ModeMarkdown
 	telegramBotAPI.Send(msg)
 
 }
@@ -238,43 +239,61 @@ func (telegramBot *TelegramBotAPI) NotifyRightNowTogos() {
 
 func main() {
 	var token string
-	const HELP_MESSAGE = "WTF?\n```" +
-		`# Commands
-# +: New Togo:
-=> ... +   title   [=  weight]    [+p   progress_till_now]   [:   description]    [+x | -x]   [@  start_date_as_how_many_days_from_now    start_time_as_hh:mm]    [NEXT_COMMAND]
+	const HELP_MESSAGE = "WTF?\n```\n" +
+		`## Commands
+## +: New Togo:
+=> +     title     [=  weight]      [+p     progress_till_now]     [:     description]      [+x | -x]     [@  start_date_as_how_many_days_from_now      start_time_as_hh:mm]      [...]
 
-*   Flags order are optional, and Flags and their params must be seperated by 2 SPACES.
-*   weight value can also be set by +w flag
-*   description value can also be set by +d flag
-# #: Show Togos
-=> ...   #   [NEXT_COMMAND]
-    by default shows today's togos
-=> ...   #   -[NEXT_COMMAND]
-    Show incompleted togos.
-=> ...   #   +a   [NEXT_COMMAND]
-    Show all togos on any day
-=> ...   #   -a   [NEXT_COMMAND]
-    Show all togos on any day, which are not completed yet.
-# %: Progress Made:
-=> ...   %   [NEXT_COMMAND]
-    Calculate the progress been made (by default for Today)
-=> ...   %   -[NEXT_COMMAND]
-    Calculate the progress been made, just considering the incompleted and ongoing togos.
-=> ...   %   +a  [NEXT_COMMAND]
-    Calculate the progress been made, considering everything on any day.
-=> ...   %   -a [NEXT_COMMAND]
-    Calculate the progress been made considering all incompleted togos on any day.
+*     Flags order are optional, and Flags and their params must be seperated by 2 SPACES.
+*     weight value can also be set by +w flag
+*     description value can also be set by +d flag
+## #: Show Togos
+=>     #     [...]
+      
+	by default shows today's togos
 
-# $: Get / Update a togo
-=> ... $   id   [NEXT_COMMAND]
-*   this will get and show a togo (just in today)
-=> ... $   id   [=  weight]    [+p   progress_till_now]   [:   description]    [+x | -x]   [@  start_date_as_how_many_days_from_now    start_time_as_hh:mm]    [NEXT_COMMAND]
+=>     #     -     [...]
+      
+	Show incompleted togos.
 
-# Other Notes:
-*   ... means that these cammands can also be used after previous command in the same line.
-*   Each line can contain multiple command, as many as you want. Like:
+=>     #     +a  [...] 
+      
+	Show all togos on any day
 
-=>   +   new_togo    @   1   10:00   +p  85  #  +   next_togo   +x  #   %
+=>     #     -a     [...]
+      
+	Show all togos on any day, which are not completed yet.
+
+
+## %: Progress Made:
+=>     %     [...]
+      
+	Calculate the progress been made (by default for Today)
+
+=>     %     -      [...]
+      
+	Calculate the progress been made, just considering the incompleted and ongoing togos.
+
+=>     %     +a      [...]
+      
+	Calculate the progress been made, considering everything on any day.
+
+=>     %     -a      [...]
+      
+	Calculate the progress been made considering all incompleted togos on any day.
+
+## $: Get / Update a togo
+=> $     id      [...]
+
+     this will get and show a togo (just in today)
+
+=> $     id     [=  weight]      [+p     progress_till_now]     [:     description]      [+x | -x]     [@  start_date_as_how_many_days_from_now      start_time_as_hh:mm]      [...]
+
+## Other Notes:
+*     [...] means that Bot supports chaining commands; You can chain any count of any of these commands and bot will do them in queue.
+*     Each line can contain multiple command, as many as you want. Like:
+
+=>     +     new_togo      @     1     10:00     +p  85  #  +     next_togo     +x  #   %
 
 *   Extra:
 =>        +x: its an extra Togo. its not mandatory but has extra points doing it.
@@ -282,7 +301,7 @@ func main() {
 *   all params between [] are optional.
 
 
-# Remember:
+## Notes:
 *   The flag list [& also commands] separator is 2 SPACES. space character will be evaluated as a part of the current flag's param. do not be mistaken.
 *   in 'add new togo' syntax, all flags are optional except for the title, meaning that you can simply add new togos even with specifying the title only such as:
 =>  +   new togo here
