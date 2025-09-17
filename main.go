@@ -289,10 +289,12 @@ func main() {
 				switch terms[i] {
 				case "+":
 					if numOfTerms > 1 {
-						var err error
-						togo := Togo.Extract(update.Message.Chat.ID, terms[i+1:])
-						if togo.Id, err = togo.Save(); err == nil {
-							response.TextMsg = fmt.Sprint(now.Get(), ": DONE!")
+						if togo, err := Togo.Extract(update.Message.Chat.ID, terms[i+1:]); err == nil {
+							if togo.Id, err = togo.Save(); err == nil {
+								response.TextMsg = fmt.Sprint(now.Get(), ": DONE!")
+							} else {
+								response.TextMsg = err.Error()
+							}
 						} else {
 							response.TextMsg = err.Error()
 						}
