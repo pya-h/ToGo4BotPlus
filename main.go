@@ -143,7 +143,7 @@ func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, ju
 func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 	return &tgbotapi.ReplyKeyboardMarkup{ResizeKeyboard: true,
 		OneTimeKeyboard: false,
-		Keyboard: [][]tgbotapi.KeyboardButton{{tgbotapi.KeyboardButton{Text: "#"}, tgbotapi.KeyboardButton{Text: "#  -"}, tgbotapi.KeyboardButton{Text: "#  +a"}, tgbotapi.KeyboardButton{Text: "#  -a"}},
+		Keyboard: [][]tgbotapi.KeyboardButton{{tgbotapi.KeyboardButton{Text: "#️⃣"}, tgbotapi.KeyboardButton{Text: "#️⃣  -"}, tgbotapi.KeyboardButton{Text: "#️⃣  +a"}, tgbotapi.KeyboardButton{Text: "#️⃣  -a"}},
 			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  -a"}, tgbotapi.KeyboardButton{Text: "✅  a"}},
 			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  a"}},
 			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  a"}},
@@ -368,6 +368,7 @@ func main() {
 						response.TextMsg = "You must provide at least one Parameters!"
 					}
 				case "#":
+				case "#️⃣":
 					var results []string
 					just_undones := i+1 < numOfTerms && terms[i+1][0] == '-'
 					all_days := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
@@ -527,7 +528,7 @@ func main() {
 							(*togo).Progress = 0
 						}
 						(*togo).Update(response.TargetChatId)
-						response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, false, false)
+						response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, callbackData.AllDays, callbackData.JustUndones)
 						response.TextMsg = "✅ DONE! Now select the next togo you want to tick ..."
 					}
 				case RemoveTogo:
@@ -535,7 +536,7 @@ func main() {
 					if err == nil {
 						if len(togos) >= 1 {
 							response.TextMsg = "❌ DONE! Now select the next togo you want to REMOVE ..."
-							response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, callbackData.AllDays, false)
+							response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, callbackData.AllDays, callbackData.JustUndones)
 						} else {
 							response.TextMsg = "❌ DONE! All removed."
 						}

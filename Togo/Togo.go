@@ -91,7 +91,7 @@ func (togo *Togo) Save() (uint64, error) {
 	} else if id, e := res.LastInsertId(); e == nil {
 		return uint64(id), nil
 	}
-	return 0, errors.New("bot couldn't save this togo due to unknown reason")
+	return 0, errors.New("‼️ Bot couldn't save this togo due to unknown reason")
 }
 
 func isCommand(term string) bool {
@@ -105,7 +105,7 @@ func (togo *Togo) setFields(terms []string) error {
 		case "=", "+w":
 			i++
 			if _, err := fmt.Sscan(terms[i], &togo.Weight); err != nil {
-				return errors.New("Error at Togo:{" + togo.Title + "}:" + err.Error())
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}:" + err.Error())
 			}
 
 		case ":", "+d":
@@ -138,12 +138,12 @@ func (togo *Togo) setFields(terms []string) error {
 				// means that user has entered @ Days
 				hour = uint8(0)
 			} else if hour >= uint8(24) {
-				return errors.New("Error at Togo:{" + togo.Title + "}: Hour part of the time must be between 0 and 23")
+				return errors.New("‼️Error at Togo:{" + togo.Title + "}: Hour part of the time must be between 0 and 23")
 			} else if len(temp) > 1 {
 				if n, err := fmt.Sscan(temp[1], &min); err != nil || n == 0 {
-					return errors.New("Error at Togo:{" + togo.Title + "}: Provided time is invalid:" + terms[i])
+					return errors.New("‼️Error at Togo:{" + togo.Title + "}: Provided time is invalid:" + terms[i])
 				} else if min >= uint8(60) {
-					return errors.New("minute part must be between 0 and 59")
+					return errors.New("‼️minute part must be between 0 and 59")
 				}
 			}
 
@@ -155,11 +155,11 @@ func (togo *Togo) setFields(terms []string) error {
 		case "->":
 			i++
 			if _, err := fmt.Sscan(terms[i], &togo.Duration); err != nil {
-				return errors.New("Error at Togo:{" + togo.Title + "}: " + err.Error())
+				return errors.New("‼️Error at Togo:{" + togo.Title + "}: " + err.Error())
 			} else if togo.Duration > 0 {
 				togo.Duration *= time.Minute
 			} else {
-				return errors.New("Error at Togo:{" + togo.Title + "}: Duration must be positive integer!")
+				return errors.New("‼️Error at Togo:{" + togo.Title + "}: Duration must be positive integer!")
 			}
 		}
 
@@ -241,7 +241,7 @@ func (togos TogoList) Update(chatID int64, terms []string) (string, error) {
 		}
 	}
 	if targetIdx < 0 {
-		return "", errors.New("there is no togo with this Id")
+		return "", errors.New("‼️there is no togo with this Id")
 	}
 	if len(terms) > 1 && !isCommand(terms[1]) {
 
@@ -272,7 +272,7 @@ func (togos TogoList) Remove(ownerID int64, togoID uint64) (TogoList, error) {
 			return togos.RemoveIndex(i), nil
 		}
 	}
-	return nil, errors.New("no such togo found")
+	return nil, errors.New("‼️no such togo found")
 }
 
 func (togos TogoList) Get(togoID uint64) (*Togo, error) {
@@ -282,7 +282,7 @@ func (togos TogoList) Get(togoID uint64) (*Togo, error) {
 			return &togos[i], nil
 		}
 	}
-	return nil, errors.New("can not find this togo")
+	return nil, errors.New("‼️can not find this togo")
 }
 
 // ---------------------- Shared Functions --------------------------------
@@ -385,7 +385,7 @@ func LoadEverybodysToday() (TogoList, error) {
 	var warning error = nil
 
 	if currupted_rows > 0 {
-		warning = errors.New(fmt.Sprint("bot couldn't read ", currupted_rows, " togos from database because their data seem currupted"))
+		warning = errors.New(fmt.Sprint("‼️ Bot couldn't read ", currupted_rows, " togos from database because their data seem currupted"))
 	}
 	return togos, warning
 }
