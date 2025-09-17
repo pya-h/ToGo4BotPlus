@@ -292,7 +292,6 @@ func main() {
 						var err error
 						togo := Togo.Extract(update.Message.Chat.ID, terms[i+1:])
 						if togo.Id, err = togo.Save(); err == nil {
-
 							response.TextMsg = fmt.Sprint(now.Get(), ": DONE!")
 						} else {
 							response.TextMsg = err.Error()

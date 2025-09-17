@@ -23,7 +23,6 @@ type Date struct {
 }
 
 func (d *Date) Get() string {
-
 	return fmt.Sprintf("%d-%d-%d\t%d:%d", d.Year(), d.Month(), d.Day(), d.Hour(), d.Minute())
 }
 func (d *Date) Short() string {
@@ -104,9 +103,8 @@ func (togo *Togo) setFields(terms []string) error {
 		switch terms[i] {
 		case "=", "+w":
 			i++
-
 			if _, err := fmt.Sscan(terms[i], &togo.Weight); err != nil {
-				return err
+				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}:", err.Error()))
 			}
 
 		case ":", "+d":
@@ -118,7 +116,6 @@ func (togo *Togo) setFields(terms []string) error {
 			togo.Extra = false
 		case "+p":
 			i++
-
 			if _, err := fmt.Sscan(terms[i], &togo.Progress); err != nil {
 				return err
 			} else if togo.Progress > 100 {
@@ -127,41 +124,41 @@ func (togo *Togo) setFields(terms []string) error {
 		case "@":
 			// im++
 			i++
-			today := Today()
-			var delta int
-			if _, err := fmt.Sscan(terms[i], &delta); err != nil {
-				return err
+			date := Today()
+			var delta int = 0
+			if _, err := fmt.Sscan(terms[i], &delta); err == nil {
+				i++
 			}
-			today = Date{today.AddDate(0, 0, delta)}
-			i++
+			date = Date{date.AddDate(0, 0, delta)}
 			temp := strings.Split(terms[i], ":")
-			var hour, min int
+			hour := uint8(0)
+			min := uint8(0)
 			if _, err := fmt.Sscan(temp[0], &hour); err != nil {
-				return err
-			} else if hour >= 24 || hour < 0 {
-				return errors.New("hour part must be between 0 and 23")
+				// means that user has entered @ Days
+				hour = uint8(0)
+			} else if hour >= uint8(24) {
+				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}; Hour part of the time must be between 0 and 23"))
+			} else if len(temp) > 1 {
+				if _, err := fmt.Sscan(temp[1], &min); err != nil {
+					return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}; Provided time is invalid:", terms[i]))
+				} else if min >= uint8(60) {
+					return errors.New("minute part must be between 0 and 59")
+				}
 			}
-			if _, err := fmt.Sscan(temp[1], &min); err != nil {
-				return err
-			} else if min >= 60 || min < 0 {
-				return errors.New("minute part must be between 0 and 59")
-			}
+
 			if locale, err := time.LoadLocation("Asia/Tehran"); err == nil {
-
-				togo.Date = Date{time.Date(today.Year(), today.Month(), today.Day(), hour, min, 0, 0, locale)}
+				togo.Date = Date{time.Date(date.Year(), date.Month(), date.Day(), int(hour), int(min), 0, 0, locale)}
 			} else {
-				togo.Date = Date{time.Date(today.Year(), today.Month(), today.Day(), hour, min, 0, 0, time.Local)}
-
+				togo.Date = Date{time.Date(date.Year(), date.Month(), date.Day(), int(hour), int(min), 0, 0, time.Local)}
 			}
-			// get the actual date here
 		case "->":
 			i++
 			if _, err := fmt.Sscan(terms[i], &togo.Duration); err != nil {
-				return err
+				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}:", err.Error()))
 			} else if togo.Duration > 0 {
 				togo.Duration *= time.Minute
 			} else {
-				return errors.New("duration must be positive integer")
+				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}: Duration must be positive integer!"))
 			}
 		}
 
@@ -384,7 +381,7 @@ func LoadEverybodysToday() (TogoList, error) {
 	return togos, warning
 }
 
-func Extract(ownerId int64, terms []string) (togo Togo) {
+func Extract(ownerId int64, terms []string) (togo Togo, err error) {
 	// setting default values
 	if togo.Title = terms[0]; togo.Title == "" {
 		togo.Title = "Untitled"
@@ -392,6 +389,6 @@ func Extract(ownerId int64, terms []string) (togo Togo) {
 	togo.OwnerId = ownerId
 	togo.Weight = 1
 	togo.Date = Today()
-	(&togo).setFields(terms)
+	err = (&togo).setFields(terms)
 	return
 }
