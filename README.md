@@ -83,10 +83,11 @@ POSTGRES_URL=postgres connection string
 
 
 # Remember:
-*   The flag list separator is 2 SPACES. space character will be evaluated as a part of the current flag's param. do not be mistaken.
+*   The flag list [& also commands] separator is 2 SPACES. space character will be evaluated as a part of the current flag's param. do not be mistaken.
 *   in 'add new togo' syntax, all flags are optional except for the title, meaning that you can simply add new togos even with specifying the title only such as:
 =>  +   new togo here
-*   use -a flag for % and # commands to expand the togos range to ALL Times.
+*   use a flag for % and # commands to expand the togos range to ALL.
+*   use -a flag for % and # commands, to include All time togos, but only teh ones that are not done.
 
 # P.S.:
    Street/Service Project, means that this one is coded while walking streets or while doing service!

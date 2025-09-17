@@ -124,9 +124,6 @@ func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, ju
 		}
 		status := ""
 		if togos[i].Progress >= 100 {
-			if justUndones {
-				continue
-			}
 			status = "✅ "
 		}
 		var togoTitle string = fmt.Sprint(status, togos[i].Title)
@@ -146,9 +143,9 @@ func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 	return &tgbotapi.ReplyKeyboardMarkup{ResizeKeyboard: true,
 		OneTimeKeyboard: false,
 		Keyboard: [][]tgbotapi.KeyboardButton{{tgbotapi.KeyboardButton{Text: "#"}, tgbotapi.KeyboardButton{Text: "#  -"}, tgbotapi.KeyboardButton{Text: "#  +a"}, tgbotapi.KeyboardButton{Text: "#  -a"}},
+			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  -a"}, tgbotapi.KeyboardButton{Text: "✅  a"}},
 			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  a"}},
 			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  a"}},
-			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  a"}},
 		}}
 }
 
@@ -241,9 +238,58 @@ func (telegramBot *TelegramBotAPI) NotifyRightNowTogos() {
 
 func main() {
 	var token string
+	const HELP_MESSAGE = "WTF?\n```" +
+		`# Commands
+# +: New Togo:
+=> ... +   title   [=  weight]    [+p   progress_till_now]   [:   description]    [+x | -x]   [@  start_date_as_how_many_days_from_now    start_time_as_hh:mm]    [NEXT_COMMAND]
+
+*   Flags order are optional, and Flags and their params must be seperated by 2 SPACES.
+*   weight value can also be set by +w flag
+*   description value can also be set by +d flag
+# #: Show Togos
+=> ...   #   [NEXT_COMMAND]
+    by default shows today's togos
+=> ...   #   -[NEXT_COMMAND]
+    Show incompleted togos.
+=> ...   #   +a   [NEXT_COMMAND]
+    Show all togos on any day
+=> ...   #   -a   [NEXT_COMMAND]
+    Show all togos on any day, which are not completed yet.
+# %: Progress Made:
+=> ...   %   [NEXT_COMMAND]
+    Calculate the progress been made (by default for Today)
+=> ...   %   -[NEXT_COMMAND]
+    Calculate the progress been made, just considering the incompleted and ongoing togos.
+=> ...   %   +a  [NEXT_COMMAND]
+    Calculate the progress been made, considering everything on any day.
+=> ...   %   -a [NEXT_COMMAND]
+    Calculate the progress been made considering all incompleted togos on any day.
+
+# $: Get / Update a togo
+=> ... $   id   [NEXT_COMMAND]
+*   this will get and show a togo (just in today)
+=> ... $   id   [=  weight]    [+p   progress_till_now]   [:   description]    [+x | -x]   [@  start_date_as_how_many_days_from_now    start_time_as_hh:mm]    [NEXT_COMMAND]
+
+# Other Notes:
+*   ... means that these cammands can also be used after previous command in the same line.
+*   Each line can contain multiple command, as many as you want. Like:
+
+=>   +   new_togo    @   1   10:00   +p  85  #  +   next_togo   +x  #   %
+
+*   Extra:
+=>        +x: its an extra Togo. its not mandatory but has extra points doing it.
+=>        -x: not extra (default)
+*   all params between [] are optional.
+
+
+# Remember:
+*   The flag list [& also commands] separator is 2 SPACES. space character will be evaluated as a part of the current flag's param. do not be mistaken.
+*   in 'add new togo' syntax, all flags are optional except for the title, meaning that you can simply add new togos even with specifying the title only such as:
+=>  +   new togo here
+*   use a flag for % and # commands to expand the togos range to ALL.
+*   use -a flag for % and # commands, to include All time togos, but only teh ones that are not done.` + "\n```"
 
 	env = nil
-
 	if envFile, err := godotenv.Read(".env"); err != nil {
 		panic(err)
 	} else {
@@ -274,7 +320,7 @@ func main() {
 	go bot.NotifyRightNowTogos() // run the scheduler that will check which togos are hapening right now, for each user
 	log.Println("configured.")
 	for update := range updates {
-		response := TelegramResponse{TextMsg: "What?"}
+		response := TelegramResponse{TextMsg: HELP_MESSAGE}
 
 		// ---------------------- Handling Casual Telegram text Messages ------------------------------
 		if update.Message != nil { // If we got a message
@@ -307,7 +353,7 @@ func main() {
 					just_undones := i+1 < numOfTerms && terms[i+1][0] == '-'
 					all_days := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
 
-					togos, warning := Togo.Load(update.Message.Chat.ID, !all_days)
+					togos, warning := Togo.Load(update.Message.Chat.ID, !all_days, all_days && terms[i+1] == "-a")
 					if togos == nil {
 						log.Println(warning)
 						response.TextMsg = warning.Error()
@@ -340,7 +386,7 @@ func main() {
 					var warning error
 					all_days := i+1 < numOfTerms && terms[i+1] == "a"
 
-					togos, warning = Togo.Load(update.Message.Chat.ID, !all_days)
+					togos, warning = Togo.Load(update.Message.Chat.ID, !all_days, all_days && terms[i+1] == "-a")
 					if togos == nil {
 						log.Println(warning.Error())
 						response.TextMsg = warning.Error()
@@ -365,7 +411,7 @@ func main() {
 					var err error
 					// set or update a togo
 					if i+1 < numOfTerms {
-						togos, err = Togo.Load(update.Message.Chat.ID, false)
+						togos, err = Togo.Load(update.Message.Chat.ID, false, false)
 						if togos != nil {
 							if resp, err := togos.Update(update.Message.Chat.ID, terms[i+1:]); err == nil {
 								response.TextMsg = resp
@@ -381,11 +427,11 @@ func main() {
 					}
 				case "✅":
 					allDays := i+1 < numOfTerms && (terms[i+1] == "a" || terms[i+1] == "-a")
-					togos, err := Togo.Load(update.Message.Chat.ID, !allDays)
+					togos, err := Togo.Load(update.Message.Chat.ID, !allDays, allDays && terms[i+1] == "-a")
 					if togos != nil {
 						if len(togos) >= 1 {
 							response.TextMsg = "Here are your togos for today:"
-							response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, allDays, terms[i+1] == "-a")
+							response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, allDays, allDays && terms[i+1] == "-a")
 						} else {
 							response.TextMsg = "No togos to tick!"
 						}
@@ -400,18 +446,22 @@ func main() {
 					var err error
 					allDays := i+1 < numOfTerms && (terms[i+1] == "a" || terms[i+1] == "-a")
 
-					if togos, err = Togo.Load(update.Message.Chat.ID, !allDays); togos == nil {
+					if togos, err = Togo.Load(update.Message.Chat.ID, !allDays, allDays && terms[i+1] == "-a"); togos == nil {
 						response.TextMsg = err.Error()
 						bot.SendTextMessage(response)
 					} else {
-						response.TextMsg = "Here are your Today's togos:"
-						if allDays {
-							response.TextMsg = "Here are your ALL togos:"
+						if len(togos) >= 1 {
+							response.TextMsg = "Here are your Today's togos:"
+							if allDays {
+								response.TextMsg = "Here are your ALL togos:"
+							}
+							if err != nil {
+								response.TextMsg = fmt.Sprintln(response.TextMsg, "- - - - - - - - - - - - - - - - - - - - - - - -\n", err.Error())
+							}
+							response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, allDays && terms[i+1] == "-a")
+						} else {
+							response.TextMsg = "No togos so far..."
 						}
-						if err != nil {
-							response.TextMsg = fmt.Sprintln(response.TextMsg, "- - - - - - - - - - - - - - - - - - - - - - - -\n", err.Error())
-						}
-						response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, terms[i+1] == "-a")
 					}
 				case "/db":
 					if adminId, err := strconv.Atoi(env["ADMIN_ID"]); err == nil && int64(adminId) == response.TargetChatId {
@@ -439,7 +489,7 @@ func main() {
 			callbackData := LoadCallbackData(update.CallbackQuery.Data)
 
 			var err error
-			togos, err = Togo.Load(response.TargetChatId, !callbackData.AllDays)
+			togos, err = Togo.Load(response.TargetChatId, !callbackData.AllDays, callbackData.JustUndones)
 			if togos != nil {
 				if err != nil {
 					response.TextMsg = err.Error()

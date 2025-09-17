@@ -104,7 +104,7 @@ func (togo *Togo) setFields(terms []string) error {
 		case "=", "+w":
 			i++
 			if _, err := fmt.Sscan(terms[i], &togo.Weight); err != nil {
-				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}:", err.Error()))
+				return errors.New("Error at Togo:{" + togo.Title + "}:" + err.Error())
 			}
 
 		case ":", "+d":
@@ -137,10 +137,10 @@ func (togo *Togo) setFields(terms []string) error {
 				// means that user has entered @ Days
 				hour = uint8(0)
 			} else if hour >= uint8(24) {
-				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}; Hour part of the time must be between 0 and 23"))
+				return errors.New("Error at Togo:{" + togo.Title + "}: Hour part of the time must be between 0 and 23")
 			} else if len(temp) > 1 {
 				if _, err := fmt.Sscan(temp[1], &min); err != nil {
-					return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}; Provided time is invalid:", terms[i]))
+					return errors.New("Error at Togo:{" + togo.Title + "}: Provided time is invalid:" + terms[i])
 				} else if min >= uint8(60) {
 					return errors.New("minute part must be between 0 and 59")
 				}
@@ -154,11 +154,11 @@ func (togo *Togo) setFields(terms []string) error {
 		case "->":
 			i++
 			if _, err := fmt.Sscan(terms[i], &togo.Duration); err != nil {
-				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}:", err.Error()))
+				return errors.New("Error at Togo:{" + togo.Title + "}: " + err.Error())
 			} else if togo.Duration > 0 {
 				togo.Duration *= time.Minute
 			} else {
-				return errors.New(fmt.Sprint("Error at Togo:{", togo.Title, "}: Duration must be positive integer!"))
+				return errors.New("Error at Togo:{" + togo.Title + "}: Duration must be positive integer!")
 			}
 		}
 
@@ -285,7 +285,7 @@ func (togos TogoList) Get(togoID uint64) (*Togo, error) {
 }
 
 // ---------------------- Shared Functions --------------------------------
-func Load(ownerId int64, justToday bool) (togos TogoList, err error) {
+func Load(ownerId int64, justToday bool, justUndones bool) (togos TogoList, err error) {
 	currupted_rows := 0
 	togos = make(TogoList, 0)
 	err = nil
@@ -293,15 +293,23 @@ func Load(ownerId int64, justToday bool) (togos TogoList, err error) {
 		defer db.Close()
 		// ***** BETTER ALGORITHM
 		// FIRST GET THE COUNT OF ROWS, then create a slice of that size and then load into that.
-		const SELECT_QUERY string = "SELECT id, owner_id, title, description, weight, extra, progress, date, duration FROM togos WHERE owner_id=? ORDER BY date"
+		query := "SELECT id, owner_id, title, description, weight, extra, progress, date, duration FROM togos WHERE owner_id=?"
+
+		if justUndones {
+			query += " AND progress < 100"
+		}
+		query += " ORDER BY date"
 		/* if justToday {
 			today := Date{time.Now()}
 			next := Date{today.AddDate(0, 0, 1)}
 			fmt.Println(next.Short())
-			SELECT_QUERY = fmt.Sprintf("%s WHERE date >= DATETIME(%s)", SELECT_QUERY, today.Short())//, next.Short())
-			fmt.Println(SELECT_QUERY)
+
+			query = fmt.Sprintf("%s WHERE date >= DATETIME(%s)",
+			query, today.Short())//, next.Short())
+			fmt.Println(
+			query)
 		}*/
-		rows, e := db.Query(SELECT_QUERY, ownerId)
+		rows, e := db.Query(query, ownerId)
 		if e != nil {
 			err = e
 			return
