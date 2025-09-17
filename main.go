@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"time"
 
+	"ToGo4BotPlus/Togo"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	godotenv "github.com/joho/godotenv"
-	Togo "github.com/pya-h/ToGo4BotPlus/Togo"
 )
 
 const (

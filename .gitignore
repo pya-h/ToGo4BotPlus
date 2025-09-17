@@ -1,7 +1,7 @@
 .vercel
 .idea
-go.mod
-go.sum
+./go.mod
+./go.sum
 .env
 *.db
 tests
