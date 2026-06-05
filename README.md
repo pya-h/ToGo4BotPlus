@@ -37,91 +37,241 @@ TELEGRAM_TOKEN=token
 POSTGRES_URL=postgres connection string
 
 # Markup Keyboard
-   Comparing to togo4 console app, this one has many extra features icluding a Reply Markup keyboard and Inline keyboards on many section,
-   Making it easyier to interact with the app.
+
+Comparing to togo4 console app, this one has many extra features including a Reply Markup keyboard and Inline keyboards in many sections, making it easier to interact with the app.
+
 # Commands
-# +: New Togo:
-=> ... +   title   [=  weight]    [+p   progress_till_now]   [:   description]    [+x | -x]   [@  start_date_as_how_many_days_from_now    start_time_as_hh:mm]    [NEXT_COMMAND]
 
-*   Flags order are optional, and Flags and their params must be seperated by 2 SPACES.
-*   weight value can also be set by +w flag
-*   description value can also be set by +d flag
-## #: Show Togos
+## `+` Add New Togo
 
-Show today's togos (default):
-=> ...  #  [NEXT_COMMAND]
+Creates a new task with optional flags.
 
-Show only incomplete togos (today):
-=> ...  #  -  [NEXT_COMMAND]
+**Syntax:**
+```
++  title  [=  weight]  [+p  progress]  [:  description]  [+x | -x]  [@  days  hh:mm]  [->  duration]
+```
 
-Show all togos across all days:
-=> ...  #  +a  [NEXT_COMMAND]
+**Flags:**
+- `=` or `+w` - Weight (importance, default: 1)
+- `+p` - Progress percentage (0-100)
+- `:` or `+d` - Description
+- `+x` - Mark as extra task
+- `-x` - Mark as normal task (default)
+- `@` - Schedule (days from now, then time as HH:MM)
+- `->` - Duration in minutes
 
-Show all incomplete togos across all days:
-=> ...  #  -a  [NEXT_COMMAND]
+**Examples:**
+```
++  Buy groceries
++  Finish project  =  10  +p  50  :  Complete by Friday
++  Meeting  @  1  14:30
++  Workout  ->  60  +x
++  Report  =  8  :  Quarterly report  @  3  09:00
+```
 
-## %: Progress Made
+**Notes:**
+- All flags are optional except title
+- Flag order doesn't matter
+- Flags and values must be separated by exactly 2 spaces
 
-Show today's progress (default):
-=> ...  %  [NEXT_COMMAND]
+---
 
-Show progress for incomplete togos only (today):
-=> ...  %  -  [NEXT_COMMAND]
+## `#` Show Togos
 
-Show progress for all togos across all days:
-=> ...  %  +a  [NEXT_COMMAND]
+Display your tasks with optional filtering.
 
-Show progress for all incomplete togos across all days:
-=> ...  %  -a  [NEXT_COMMAND]
+**Usage:**
 
-# $: Get / Update a togo
-=> ... $   id   [NEXT_COMMAND]
-*   this will get and show a togo (just in today)
-=> ... $   id   [=  weight]    [+p   progress_till_now]   [:   description]    [+x | -x]   [@  start_date_as_how_many_days_from_now    start_time_as_hh:mm]    [NEXT_COMMAND]
+| Command | Shows |
+|---------|-------|
+| `#` | Today's togos |
+| `#  -` | Today's incomplete togos only |
+| `#  +a` | All togos (all days) |
+| `#  -a` | All incomplete togos (all days) |
 
-# Other Notes:
-*   ... means that these cammands can also be used after previous command in the same line.
-*   Each line can contain multiple command, as many as you want. Like:
+**Examples:**
+```
+#
+#  -
+#  +a
+#  -a
+```
 
-=>   +   new_togo    @   1   10:00   +p  85  #  +   next_togo   +x  #   %
+---
 
-*   Extra:
-=>        +x: its an extra Togo. its not mandatory but has extra points doing it.
-=>        -x: not extra (default)
-*   all params between [] are optional.
+## `%` Show Progress
 
+Calculate progress and completion statistics.
 
-# Remember:
-*   The flag list [& also commands] separator is 2 SPACES. space character will be evaluated as a part of the current flag's param. do not be mistaken.
-*   in 'add new togo' syntax, all flags are optional except for the title, meaning that you can simply add new togos even with specifying the title only such as:
-=>  +   new togo here
-*   use a flag for % and # commands to expand the togos range to ALL.
-*   use -a flag for % and # commands, to include All time togos, but only teh ones that are not done.
+**Usage:**
+
+| Command | Calculates |
+|---------|------------|
+| `%` | Today's progress |
+| `%  -` | Today's progress (incomplete only) |
+| `%  +a` | Overall progress (all days) |
+| `%  -a` | Overall progress (incomplete only) |
+
+**Examples:**
+```
+%
+%  -
+%  +a
+%  -a
+```
+
+---
+
+## `✅` Tick (Complete) Togos
+
+Mark togos as complete/incomplete using inline buttons.
+
+**Usage:**
+
+| Command | Shows |
+|---------|-------|
+| `✅` | Today's togos (for ticking) |
+| `✅  -a` | All togos for ticking |
+| `✅  +a` | All togos for ticking |
+
+**Examples:**
+```
+✅
+✅  -a
+```
+
+Click any togo button to toggle its completion status.
+
+---
+
+## `❌` Remove Togos
+
+Remove/delete togos using inline buttons.
+
+**Usage:**
+
+| Command | Shows |
+|---------|-------|
+| `❌` | Today's togos (for removal) |
+| `❌  -a` | All togos for removal |
+| `❌  +a` | All togos for removal |
+
+**Examples:**
+```
+❌
+❌  -a
+```
+
+Click any togo button to delete it.
+
+---
+
+## `$` Get/Update Togo
+
+Retrieve and update a specific togo by ID.
+
+**Syntax:**
+```
+$  id  [=  weight]  [+p  progress]  [:  description]  [+x | -x]  [@  days  hh:mm]  [->  duration]
+```
+
+**Examples:**
+```
+$  1
+$  1  =  5  +p  75
+$  1  :  Updated description
+```
+
+---
+
+## Chaining Commands
+
+All commands can be chained in a single message. Use any command in sequence without prefix.
+
+**Examples:**
+
+```
++  New task  =  5  #  %
+```
+Creates a new task, shows today's togos, displays progress.
+
+```
++  Task 1  #  -  +  Task 2  %
+```
+Creates two tasks, shows incomplete tasks, displays progress.
+
+```
+#  +p  50  $  1  :  Updated  #  +a
+```
+Shows today's togos, updates task 1, shows all togos.
+
+---
+
+## Other Notes
+
+- All separators between command/flag and value must be exactly 2 spaces
+- Commands can be combined in any order on a single line
+- Each flag is case-sensitive (use lowercase)
 
 ## Command Token Reference
 
 | Command | Token | Meaning |
 |---------|-------|---------|
-| # | (default) | Show today's togos |
-| # | - | Show incomplete togos (today only) |
-| # | +a | Show all togos (all days) |
-| # | -a | Show all incomplete togos (all days) |
-| % | (default) | Progress for today |
-| % | - | Progress for incomplete togos (today) |
-| % | +a | Progress for all togos (all days) |
-| % | -a | Progress for all incomplete togos (all days) |
-| ✅ | (default) | Tick/complete today's togos |
-| ✅ | -a | Tick/complete all days' togos |
-| ✅ | +a | Tick/complete all days' togos |
-| ❌ | (default) | Remove today's togos |
-| ❌ | -a | Remove all days' togos |
-| ❌ | +a | Remove all days' togos |
+| `+` | (title) | Add new togo |
+| `#` | (default) | Show today's togos |
+| `#` | `-` | Show incomplete togos (today only) |
+| `#` | `+a` | Show all togos (all days) |
+| `#` | `-a` | Show all incomplete togos (all days) |
+| `%` | (default) | Progress for today |
+| `%` | `-` | Progress for incomplete togos (today) |
+| `%` | `+a` | Progress for all togos (all days) |
+| `%` | `-a` | Progress for all incomplete togos (all days) |
+| `✅` | (default) | Tick/complete today's togos |
+| `✅` | `-a` | Tick/complete all days' togos |
+| `❌` | (default) | Remove today's togos |
+| `❌` | `-a` | Remove all days' togos |
 
 **Important:** All tokens require exactly 2 spaces as separator. Examples:
-- Correct: `#  +a` (2 spaces between # and +a)
-- Wrong: `#  + a` (treats +a as two separate terms)
-- Wrong: `# +a` (only 1 space, won't parse correctly)
-- Wrong: `#   +a` (3 spaces, won't parse correctly)
+- ✅ Correct: `#  +a` (2 spaces between # and +a)
+- ❌ Wrong: `#  + a` (treats +a as two separate terms)
+- ❌ Wrong: `# +a` (only 1 space, won't parse correctly)
+- ❌ Wrong: `#   +a` (3 spaces, won't parse correctly)
 
-# P.S.:
-   Street/Service Project, means that this one is coded while walking streets or while doing service!
+## Testing
+
+### Run All Tests
+
+```bash
+go test ./...
+```
+
+This runs all unit tests and integration tests across the project.
+
+### Run Specific Test Suites
+
+Unit tests for Togo package:
+```bash
+go test -v ./Togo
+```
+
+Integration tests (bounds checking, panic recovery, etc.):
+```bash
+go test -v -run Integration
+```
+
+B1 bounds checking tests specifically:
+```bash
+go test -v -run Handler integration_test.go main.go main_test.go
+```
+
+### Build
+
+```bash
+go build ./...
+```
+
+Ensures no compilation errors and all dependencies are correct.
+
+## P.S.
+
+Street/Service Project means this one is coded while walking streets or while doing service!
