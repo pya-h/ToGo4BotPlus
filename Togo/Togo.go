@@ -104,12 +104,18 @@ func (togo *Togo) setFields(terms []string) error {
 		switch terms[i] {
 		case "=", "+w":
 			i++
+			if i >= numOfTerms {
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: weight flag requires a value")
+			}
 			if _, err := fmt.Sscan(terms[i], &togo.Weight); err != nil {
-				return errors.New("‼️ Error at Togo:{" + togo.Title + "}:" + err.Error())
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: invalid weight value: " + err.Error())
 			}
 
 		case ":", "+d":
 			i++
+			if i >= numOfTerms {
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: description flag requires a value")
+			}
 			togo.Description = terms[i]
 		case "+x":
 			togo.Extra = true
@@ -117,19 +123,27 @@ func (togo *Togo) setFields(terms []string) error {
 			togo.Extra = false
 		case "+p":
 			i++
+			if i >= numOfTerms {
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: progress flag requires a value")
+			}
 			if _, err := fmt.Sscan(terms[i], &togo.Progress); err != nil {
-				return err
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: invalid progress value: " + err.Error())
 			} else if togo.Progress > 100 {
 				togo.Progress = 100
 			}
 		case "@":
-			// im++
 			i++
+			if i >= numOfTerms {
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: date flag requires at least a day or time value")
+			}
 			date := Today()
 
 			if delta, err := strconv.Atoi(terms[i]); err == nil {
 				date = Date{date.AddDate(0, 0, delta)}
 				i++
+				if i >= numOfTerms {
+					return errors.New("‼️ Error at Togo:{" + togo.Title + "}: date flag requires a time value (hh:mm format) after the day")
+				}
 			}
 			temp := strings.Split(terms[i], ":")
 			hour := uint8(0)
@@ -154,8 +168,11 @@ func (togo *Togo) setFields(terms []string) error {
 			}
 		case "->":
 			i++
+			if i >= numOfTerms {
+				return errors.New("‼️ Error at Togo:{" + togo.Title + "}: duration flag requires a value")
+			}
 			if _, err := fmt.Sscan(terms[i], &togo.Duration); err != nil {
-				return errors.New("‼️Error at Togo:{" + togo.Title + "}: " + err.Error())
+				return errors.New("‼️Error at Togo:{" + togo.Title + "}: invalid duration value: " + err.Error())
 			} else if togo.Duration > 0 {
 				togo.Duration *= time.Minute
 			} else {
@@ -391,6 +408,11 @@ func LoadEverybodysToday() (TogoList, error) {
 }
 
 func Extract(ownerId int64, terms []string) (togo Togo, err error) {
+	// Check if terms is empty
+	if len(terms) == 0 {
+		return togo, errors.New("‼️ Error: no togo title provided")
+	}
+
 	// setting default values
 	if togo.Title = terms[0]; togo.Title == "" {
 		togo.Title = "Untitled"
