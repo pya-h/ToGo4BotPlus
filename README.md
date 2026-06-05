@@ -46,24 +46,33 @@ POSTGRES_URL=postgres connection string
 *   Flags order are optional, and Flags and their params must be seperated by 2 SPACES.
 *   weight value can also be set by +w flag
 *   description value can also be set by +d flag
-# #: Show Togos
-=> ...   #   [NEXT_COMMAND]
-    by default shows today's togos
-=> ...   #   -[NEXT_COMMAND]
-    Show incompleted togos.
-=> ...   #   +a   [NEXT_COMMAND]
-    Show all togos on any day
-=> ...   #   -a   [NEXT_COMMAND]
-    Show all togos on any day, which are not completed yet.
-# %: Progress Made:
-=> ...   %   [NEXT_COMMAND]
-    Calculate the progress been made (by default for Today)
-=> ...   %   -[NEXT_COMMAND]
-    Calculate the progress been made, just considering the incompleted and ongoing togos.
-=> ...   %   +a  [NEXT_COMMAND]
-    Calculate the progress been made, considering everything on any day.
-=> ...   %   -a [NEXT_COMMAND]
-    Calculate the progress been made considering all incompleted togos on any day.
+## #: Show Togos
+
+Show today's togos (default):
+=> ...  #  [NEXT_COMMAND]
+
+Show only incomplete togos (today):
+=> ...  #  -  [NEXT_COMMAND]
+
+Show all togos across all days:
+=> ...  #  +a  [NEXT_COMMAND]
+
+Show all incomplete togos across all days:
+=> ...  #  -a  [NEXT_COMMAND]
+
+## %: Progress Made
+
+Show today's progress (default):
+=> ...  %  [NEXT_COMMAND]
+
+Show progress for incomplete togos only (today):
+=> ...  %  -  [NEXT_COMMAND]
+
+Show progress for all togos across all days:
+=> ...  %  +a  [NEXT_COMMAND]
+
+Show progress for all incomplete togos across all days:
+=> ...  %  -a  [NEXT_COMMAND]
 
 # $: Get / Update a togo
 => ... $   id   [NEXT_COMMAND]
@@ -88,6 +97,31 @@ POSTGRES_URL=postgres connection string
 =>  +   new togo here
 *   use a flag for % and # commands to expand the togos range to ALL.
 *   use -a flag for % and # commands, to include All time togos, but only teh ones that are not done.
+
+## Command Token Reference
+
+| Command | Token | Meaning |
+|---------|-------|---------|
+| # | (default) | Show today's togos |
+| # | - | Show incomplete togos (today only) |
+| # | +a | Show all togos (all days) |
+| # | -a | Show all incomplete togos (all days) |
+| % | (default) | Progress for today |
+| % | - | Progress for incomplete togos (today) |
+| % | +a | Progress for all togos (all days) |
+| % | -a | Progress for all incomplete togos (all days) |
+| ✅ | (default) | Tick/complete today's togos |
+| ✅ | -a | Tick/complete all days' togos |
+| ✅ | +a | Tick/complete all days' togos |
+| ❌ | (default) | Remove today's togos |
+| ❌ | -a | Remove all days' togos |
+| ❌ | +a | Remove all days' togos |
+
+**Important:** All tokens require exactly 2 spaces as separator. Examples:
+- Correct: `#  +a` (2 spaces between # and +a)
+- Wrong: `#  + a` (treats +a as two separate terms)
+- Wrong: `# +a` (only 1 space, won't parse correctly)
+- Wrong: `#   +a` (3 spaces, won't parse correctly)
 
 # P.S.:
    Street/Service Project, means that this one is coded while walking streets or while doing service!

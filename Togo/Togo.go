@@ -15,6 +15,9 @@ import (
 )
 
 const DATABASE_NAME string = "./togos.db"
+const CREATE_TABLE_QUERY string = `CREATE TABLE IF NOT EXISTS togos (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id BIGINT NOT NULL,
+	title VARCHAR(64) NOT NULL, description VARCHAR(1024), weight INTEGER, extra INTEGER,
+	progress INTEGER, date DATETIME, duration INTEGER)`
 
 // var taskScheduler chrono.TaskScheduler = chrono.NewDefaultTaskScheduler()
 
@@ -67,19 +70,13 @@ type Togo struct {
 }
 
 func (togo *Togo) Save() (uint64, error) {
-	const CREATE_TABLE_QUERY string = `CREATE TABLE IF NOT EXISTS togos (id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id BIGINT NOT NULL,
-	title VARCHAR(64) NOT NULL, description VARCHAR(1024), weight INTEGER, extra INTEGER,
-	progress INTEGER, date DATETIME, duration INTEGER)`
-
 	db, err := sql.Open("sqlite3", DATABASE_NAME)
 
 	if err != nil {
 		return 0, err
 	}
 	defer db.Close()
-	if _, err := db.Exec(CREATE_TABLE_QUERY); err != nil {
-		return 0, err
-	}
+	// Table is now created by InitDatabase() on startup
 	extra := 0
 	if togo.Extra {
 		extra = 1
@@ -303,6 +300,30 @@ func (togos TogoList) Get(togoID uint64) (*Togo, error) {
 }
 
 // ---------------------- Shared Functions --------------------------------
+
+// InitDatabase creates the togos table if it doesn't exist
+// This ensures the table is created before any Load/Update/Remove operations
+// and enables WAL mode for better concurrent access
+func InitDatabase() error {
+	db, err := sql.Open("sqlite3", DATABASE_NAME)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Create table if not exists
+	if _, err := db.Exec(CREATE_TABLE_QUERY); err != nil {
+		return err
+	}
+
+	// Enable WAL mode for better concurrent access handling
+	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func Load(ownerId int64, justToday bool, justUndones bool) (togos TogoList, err error) {
 	currupted_rows := 0
 	togos = make(TogoList, 0)
@@ -353,6 +374,10 @@ func Load(ownerId int64, justToday bool, justUndones bool) (togos TogoList, err 
 				togos = togos.Add(&togo)
 			}
 		}
+		// Check for errors that occurred during iteration (B8 fix)
+		if err := rows.Err(); err != nil {
+			return togos, err
+		}
 	} else {
 		err = e
 	}
@@ -395,6 +420,10 @@ func LoadEverybodysToday() (TogoList, error) {
 			togo.Duration *= time.Minute
 
 			togos = togos.Add(&togo)
+		}
+		// Check for errors that occurred during iteration (B8 fix)
+		if err := rows.Err(); err != nil {
+			return togos, err
 		}
 	} else {
 		return nil, err

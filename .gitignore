@@ -6,3 +6,4 @@
 *.db
 tests
 ex
+specs/

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 	"time"
 
@@ -28,11 +27,6 @@ type TelegramResponse struct {
 	ReplyMarkup          *tgbotapi.ReplyKeyboardMarkup  `json:"reply_markup,omitempty"`
 	InlineKeyboard       *tgbotapi.InlineKeyboardMarkup `json:"inline_keyboard,omitempty"`
 	// file/photo?
-}
-
-// ---------------------- Telegram Response Struct & Interfaces --------------------------------
-type TelegramAPIMethods interface {
-	SendTextMessage(response TelegramResponse)
 }
 
 type TelegramBotAPI struct {
@@ -92,7 +86,9 @@ func (callbackData CallbackData) Json() string {
 }
 
 func LoadCallbackData(jsonString string) (data CallbackData) {
-	json.Unmarshal([]byte(jsonString), &data)
+	if err := json.Unmarshal([]byte(jsonString), &data); err != nil {
+		log.Printf("Warning: corrupted callback data, json.Unmarshal error: %v", err)
+	}
 	return
 }
 
@@ -163,20 +159,6 @@ func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 		}}
 }
 
-// ---------------------- tgbotapi Related Functions ------------------------------
-func GetTgBotApiFunction(update *tgbotapi.Update) func(data string) error {
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TOKEN"))
-	return func(data string) error {
-		if err == nil {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, data)
-			// msg.ReplyToMessageID = update.Message.MessageID
-			bot.Send(msg)
-			return nil
-		}
-		return err
-	}
-}
-
 func SplitArguments(statement string) []string {
 	result := make([]string, 0)
 	numOfSpaces := 0
@@ -196,15 +178,6 @@ func SplitArguments(statement string) []string {
 	}
 	result = append(result, statement[segmentStartIndex:])
 	return result
-}
-
-func Log(update *tgbotapi.Update, values []string) {
-	sendMessage := GetTgBotApiFunction(update)
-	var r string
-	for _, v := range values {
-		r += v + "\n"
-	}
-	sendMessage(r)
 }
 
 func (telegramBot *TelegramBotAPI) InformAdmin(news string) {
@@ -331,6 +304,11 @@ func main() {
 
 	bot, err := NewTelegramBotAPI(token)
 	if err != nil {
+		panic(err)
+	}
+
+	// Initialize database (create table, enable WAL mode)
+	if err := Togo.InitDatabase(); err != nil {
 		panic(err)
 	}
 
