@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
 
@@ -88,7 +89,7 @@ func newRecordingBot(t *testing.T) (*TelegramBotAPI, *recordingTransport) {
 	if err != nil {
 		t.Fatalf("failed to create BotAPI with test transport: %v", err)
 	}
-	return &TelegramBotAPI{BotAPI: botAPI}, transport
+	return &TelegramBotAPI{BotAPI: botAPI, flows: NewFlowStore()}, transport
 }
 
 func withTempWorkingDir(t *testing.T, initDB bool) {
@@ -112,6 +113,9 @@ func withTempWorkingDir(t *testing.T, initDB bool) {
 		}
 		if err := Task.InitDatabase(); err != nil {
 			t.Fatalf("failed to initialize isolated task db: %v", err)
+		}
+		if err := Idea.InitDatabase(); err != nil {
+			t.Fatalf("failed to initialize isolated idea db: %v", err)
 		}
 	}
 }

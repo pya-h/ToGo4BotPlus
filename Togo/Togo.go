@@ -92,7 +92,8 @@ func (togo *Togo) Save() (uint64, error) {
 }
 
 func isCommand(term string) bool {
-	return term == "+" || term == "%" || term == "#" || term == "$" || term == "tk" || term == "TK"
+	return term == "+" || term == "%" || term == "#" || term == "$" || term == "tk" || term == "TK" ||
+		term == "*" || term == ";" || term == ";u" || term == "*x"
 }
 
 func (togo *Togo) setFields(terms []string) error {

@@ -36,6 +36,26 @@
 TOKEN=telegram bot token
 ADMIN_ID=telegram user id to receive admin notifications
 
+# Two Menu Styles
+
+The bot offers two complementary ways to drive it:
+
+1. **Command-list keyboard (Type A)** — a persistent Telegram *reply keyboard*
+   ([`MainKeyboardMenu`](main.go)) shown under the text box. Its buttons send the
+   one-shot command tokens for listing togos/tasks/ideas and showing stats
+   (`#️⃣`, `✅`, `%`, `~`, `;`, `*x`, …). Fast for power users.
+2. **Guided wizards (Type B)** — slash commands that start a *step-by-step*
+   conversation, editing a single message as you go and offering inline buttons
+   for option selection:
+   - `/addIdea`, `/addTogo`, `/addTask` — guided creation.
+   - `/ideas`, `/togos`, `/tasks` — manage menu: pick an item, then edit fields,
+     toggle done (togos/tasks), or delete it.
+   - `/cancel` — abort the current wizard.
+
+   These commands are also registered with Telegram so they appear in the native
+   "/" command list. Guided-flow conversation state is kept in memory; if the bot
+   restarts mid-wizard, just run the command again.
+
 # Markup Keyboard
 
 Comparing to togo4 console app, this one has many extra features including a Reply Markup keyboard and Inline keyboards in many sections, making it easier to interact with the app.
@@ -355,6 +375,60 @@ or task list is large the buttons are split into pages of up to 90 items.
 - A `⬅️ Prev` / `page/total` / `Next ➡️` row appears under the buttons
 - Navigating re-loads the current togos/tasks, so the menu always reflects live data
 - Ticking/removing an item keeps you on the same page
+
+## Ideas (separate from togos and tasks)
+
+Ideas are a lightweight capture list: a piece of text, a priority flag, and a
+category. They have no schedule, progress, or "done" state.
+
+### Idea Commands
+
+Add an idea:
+
+```bash
+*  <text>  [+! | -!]  [+c  <category>]
+```
+
+- `+!` marks it high-priority, `-!` normal (default)
+- `+c  <category>` assigns a category
+
+List ideas:
+
+| Command | Shows |
+|---------|-------|
+| `;` | All ideas |
+| `;  !` | High-priority ideas only |
+| `;  c  <category>` | Ideas in that category |
+
+Get/update an idea by id:
+
+```bash
+;u  <id>  [+t  <new text>]  [+! | -!]  [+c  <category>]
+```
+
+Remove ideas with an inline keyboard (paginated like the togo/task menus):
+
+```bash
+*x
+```
+
+### Category suggestions
+
+Every category you use is remembered per-user. In the `/addIdea` wizard (and idea
+editing), your previously used categories appear as inline suggestion buttons,
+ordered by how often you've used them, alongside a `✏️ Custom` option to type a
+new one. A dedicated `idea_categories` table backs these suggestions.
+
+## Command Token Reference (Ideas)
+
+| Command | Token | Meaning |
+|---------|-------|---------|
+| `*` | (text) | Add a new idea |
+| `;` | (default) | List all ideas |
+| `;` | `!` | List high-priority ideas |
+| `;` | `c  <category>` | List ideas by category |
+| `;u` | `id` | Get/update an idea by id |
+| `*x` | (default) | Remove ideas via inline keyboard |
 
 ## Testing
 

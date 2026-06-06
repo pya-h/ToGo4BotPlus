@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
 
@@ -71,6 +72,16 @@ func seedTask(t *testing.T, ownerID int64, title string, progress uint8) uint64 
 	id, err := seed.Save()
 	if err != nil {
 		t.Fatalf("failed to seed task %q: %v", title, err)
+	}
+	return id
+}
+
+func seedIdea(t *testing.T, ownerID int64, text string, high bool, category string) uint64 {
+	t.Helper()
+	seed := &Idea.Idea{OwnerId: ownerID, Text: text, IsHighPriority: high, Category: category}
+	id, err := seed.Save()
+	if err != nil {
+		t.Fatalf("failed to seed idea %q: %v", text, err)
 	}
 	return id
 }
@@ -408,7 +419,7 @@ func countMenuButtons(menu *tgbotapi.InlineKeyboardMarkup) (items int, navButton
 				continue
 			}
 			switch LoadCallbackData(*button.CallbackData).Action {
-			case ShowTogoMenuPage, ShowTaskMenuPage:
+			case ShowTogoMenuPage, ShowTaskMenuPage, ShowIdeaMenuPage:
 				navButtons++
 			default:
 				items++
@@ -587,5 +598,126 @@ func TestHandleUpdateShowMenuPageCallbacks(t *testing.T) {
 		if !strings.Contains(text, tc.expectContains) {
 			t.Fatalf("callback %q expected response to contain %q, got %q", tc.payload, tc.expectContains, text)
 		}
+	}
+}
+
+func TestHandleUpdateIdeaCommandInterface(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(8500)
+
+	// Add a high-priority idea with a category.
+	addText := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 700, "*  Build a rocket  +!  +c  Engineering")
+	if !strings.Contains(addText, "Idea #") || !strings.Contains(addText, "created") {
+		t.Fatalf("expected idea creation confirmation, got %q", addText)
+	}
+
+	// Add a normal-priority idea in a different category.
+	_ = sendTextUpdateAndGetLastText(t, bot, transport, chatID, 701, "*  Write a poem  +c  Creative")
+
+	// List all ideas.
+	allText := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 702, ";")
+	if !strings.Contains(allText, "Build a rocket") || !strings.Contains(allText, "Write a poem") {
+		t.Fatalf("expected both ideas in listing, got %q", allText)
+	}
+
+	// List only high-priority ideas.
+	highText := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 703, ";  !")
+	if !strings.Contains(highText, "Build a rocket") || strings.Contains(highText, "Write a poem") {
+		t.Fatalf("expected only the high-priority idea, got %q", highText)
+	}
+
+	// List by category.
+	catText := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 704, ";  c  Creative")
+	if !strings.Contains(catText, "Write a poem") || strings.Contains(catText, "Build a rocket") {
+		t.Fatalf("expected only the Creative idea, got %q", catText)
+	}
+}
+
+func TestHandleUpdateIdeaUpdateAndRemoveMenu(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(8501)
+	id := seedIdea(t, chatID, "old idea", false, "Tech")
+
+	// Update via ;u
+	updText := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 710,
+		fmt.Sprintf(";u  %d  +t  new idea text  +!", id))
+	if !strings.Contains(updText, "new idea text") || !strings.Contains(updText, "High") {
+		t.Fatalf("expected updated idea text + high priority, got %q", updText)
+	}
+
+	reloaded, _ := Idea.Load(chatID, false, "")
+	got, err := reloaded.Get(id)
+	if err != nil {
+		t.Fatalf("failed to reload idea: %v", err)
+	}
+	if got.Text != "new idea text" || !got.IsHighPriority {
+		t.Fatalf("idea update not persisted: %+v", *got)
+	}
+
+	// Remove menu (*x) should produce an inline keyboard.
+	before := transport.countEndpoint("sendMessage")
+	bot.HandleUpdate(tgbotapi.Update{Message: &tgbotapi.Message{
+		MessageID: 711, Text: "*x", Chat: &tgbotapi.Chat{ID: chatID},
+	}})
+	if transport.countEndpoint("sendMessage") <= before {
+		t.Fatal("expected sendMessage for *x remove menu")
+	}
+	req, _ := transport.lastEndpoint("sendMessage")
+	if !strings.Contains(req.Values.Get("text"), "ideas to remove") {
+		t.Fatalf("expected remove-menu prompt, got %q", req.Values.Get("text"))
+	}
+	if !strings.Contains(req.Values.Get("reply_markup"), "callback_data") {
+		t.Fatalf("expected inline keyboard with callback data, got %q", req.Values.Get("reply_markup"))
+	}
+}
+
+func TestHandleUpdateRemoveIdeaCallback(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(8502)
+	id := seedIdea(t, chatID, "removable idea", false, "")
+	seedIdea(t, chatID, "surviving idea", false, "")
+
+	text := sendCallbackAndGetEditedText(t, bot, transport, chatID, 720,
+		(CallbackData{Action: RemoveIdea, ID: int64(id)}).Json())
+	if !strings.Contains(text, "Idea removed") {
+		t.Fatalf("expected idea-removed confirmation, got %q", text)
+	}
+
+	remaining, _ := Idea.Load(chatID, false, "")
+	if len(remaining) != 1 {
+		t.Fatalf("expected 1 idea remaining after removal, got %d", len(remaining))
+	}
+
+	// Page navigation callback re-renders the remove menu.
+	pageText := sendCallbackAndGetEditedText(t, bot, transport, chatID, 721,
+		(CallbackData{Action: ShowIdeaMenuPage, MenuAction: RemoveIdea, MenuPage: 0}).Json())
+	if !strings.Contains(pageText, "Select an idea to remove") {
+		t.Fatalf("expected idea page prompt, got %q", pageText)
+	}
+}
+
+func TestIdeaInlineKeyboardMenuPaginates(t *testing.T) {
+	total := MaximumInlineMenuItems + 4
+	ideas := make(Idea.IdeaList, 0, total)
+	for i := 0; i < total; i++ {
+		ideas = append(ideas, Idea.Idea{Id: uint64(i + 1), Text: fmt.Sprintf("idea-%d", i+1)})
+	}
+
+	first := IdeaInlineKeyboardMenu(ideas, RemoveIdea, 0)
+	items, nav := countMenuButtons(first)
+	if items != MaximumInlineMenuItems {
+		t.Fatalf("page 0 expected %d item buttons, got %d", MaximumInlineMenuItems, items)
+	}
+	if nav < 1 {
+		t.Fatal("page 0 expected navigation buttons for an oversized idea list")
+	}
+	if last := IdeaInlineKeyboardMenu(ideas, RemoveIdea, 1); func() int { i, _ := countMenuButtons(last); return i }() != 4 {
+		t.Fatal("page 1 expected the 4 remaining idea buttons")
+	}
+	if IdeaInlineKeyboardMenu(nil, RemoveIdea, 0) != nil {
+		t.Fatal("expected nil keyboard for empty idea list")
 	}
 }

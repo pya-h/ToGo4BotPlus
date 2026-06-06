@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
 
@@ -20,15 +21,33 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 		}
 	}()
 
+	telegramBot.ensureFlows()
 	response := TelegramResponse{TextMsg: HELP_MESSAGE}
 
 	if update.Message != nil {
+		chatID := update.Message.Chat.ID
+
+		// 1) A guided-flow slash command (/addIdea, /ideas, /cancel, ...) takes priority.
+		if cmd, arg, ok := parseFlowCommand(update.Message.Text); ok {
+			telegramBot.handleFlowCommand(chatID, cmd, arg)
+			return
+		}
+		// 2) A reply to an in-progress guided flow.
+		if state, active := telegramBot.flows.Get(chatID); active {
+			telegramBot.handleFlowText(chatID, update.Message.Text, state)
+			return
+		}
+		// 3) Otherwise the existing stateless command handler.
 		telegramBot.handleMessageUpdate(update.Message, &response)
 		telegramBot.SendTextMessage(response)
 		return
 	}
 
 	if update.CallbackQuery != nil {
+		if cb := LoadCallbackData(update.CallbackQuery.Data); isFlowAction(cb.Action) {
+			telegramBot.handleFlowCallback(update.CallbackQuery, cb)
+			return
+		}
 		telegramBot.handleCallbackUpdate(update.CallbackQuery, &response)
 		telegramBot.EditTextMessage(response)
 	}
@@ -400,6 +419,80 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			} else {
 				response.TextMsg = "Usage: TK  <task_id>"
 			}
+		case IdeaAddCommand:
+			if i+1 < numOfTerms {
+				if idea, err := Idea.Extract(message.Chat.ID, terms[i+1:]); err == nil {
+					if idea.Id, err = idea.Save(); err == nil {
+						response.TextMsg = fmt.Sprintf("💡 Idea #%d created.", idea.Id)
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = err.Error()
+				}
+			} else {
+				response.TextMsg = "You must provide the idea text."
+			}
+		case IdeaListCommand:
+			onlyHigh := false
+			category := ""
+			if i+1 < numOfTerms {
+				switch terms[i+1] {
+				case IdeaHighPriorityToken:
+					onlyHigh = true
+				case IdeaCategoryToken:
+					if i+2 < numOfTerms {
+						category = terms[i+2]
+					}
+				}
+			}
+			ideas, warning := Idea.Load(message.Chat.ID, onlyHigh, category)
+			if ideas == nil {
+				if warning != nil {
+					response.TextMsg = warning.Error()
+				} else {
+					response.TextMsg = "Could not load ideas."
+				}
+				break
+			}
+			response.TextMsg = BuildIdeaListReport(ideas, onlyHigh, category)
+			if warning != nil {
+				response.TextMsg = fmt.Sprintf("%s\n\nwarning: %s", response.TextMsg, warning.Error())
+			}
+		case IdeaUpdateCommand:
+			if i+1 < numOfTerms {
+				ideas, err := Idea.Load(message.Chat.ID, false, "")
+				if ideas != nil {
+					if resp, updateErr := ideas.Update(message.Chat.ID, terms[i+1:]); updateErr == nil {
+						response.TextMsg = resp
+					} else {
+						response.TextMsg = updateErr.Error()
+					}
+				} else if err != nil {
+					response.TextMsg = err.Error()
+				} else {
+					response.TextMsg = "Could not load ideas for update."
+				}
+			} else {
+				response.TextMsg = "You must provide the idea identifier!"
+			}
+		case IdeaRemoveCommand:
+			ideas, warning := Idea.Load(message.Chat.ID, false, "")
+			if ideas != nil {
+				if len(ideas) >= 1 {
+					response.TextMsg = "Here are your ideas to remove:"
+					response.InlineKeyboard = IdeaInlineKeyboardMenu(ideas, RemoveIdea, 0)
+				} else {
+					response.TextMsg = "No ideas so far..."
+				}
+				if warning != nil {
+					response.TextMsg = fmt.Sprintf("%s\nwarning: %s", response.TextMsg, warning.Error())
+				}
+			} else if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load ideas for removing."
+			}
 		}
 	}
 }
@@ -588,6 +681,45 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		} else {
 			response.TextMsg = "Select a task to tick ..."
 		}
+
+	case RemoveIdea:
+		ideas, warning := Idea.Load(response.TargetChatId, false, "")
+		if ideas == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load ideas for removal."
+			}
+			break
+		}
+		updated, err := ideas.Remove(response.TargetChatId, uint64(callbackData.ID))
+		if err != nil {
+			response.TextMsg = err.Error()
+			break
+		}
+		if len(updated) >= 1 {
+			response.TextMsg = "❌ Idea removed. Pick the next idea to remove ..."
+			response.InlineKeyboard = IdeaInlineKeyboardMenu(updated, RemoveIdea, callbackData.MenuPage)
+		} else {
+			response.TextMsg = "❌ Idea removed. No ideas left in this view."
+		}
+
+	case ShowIdeaMenuPage:
+		ideas, warning := Idea.Load(response.TargetChatId, false, "")
+		if ideas == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load ideas for this page."
+			}
+			break
+		}
+		if len(ideas) == 0 {
+			response.TextMsg = "No ideas to show."
+			break
+		}
+		response.InlineKeyboard = IdeaInlineKeyboardMenu(ideas, callbackData.MenuAction, callbackData.MenuPage)
+		response.TextMsg = "Select an idea to remove ..."
 
 	default:
 		response.TextMsg = "Unsupported callback action."

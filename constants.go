@@ -26,6 +26,19 @@ const (
 	TaskTickByIdCommand      = "TK"
 )
 
+const (
+	IdeaAddCommand        = "*"
+	IdeaListCommand       = ";"
+	IdeaUpdateCommand     = ";u"
+	IdeaRemoveCommand     = "*x"
+	IdeaHighPriorityToken = "!" // `;  !` lists only high-priority ideas
+	IdeaCategoryToken     = "c" // `;  c  <category>` filters by category
+	IdeaHighPriorityFlag  = "+!"
+	IdeaNormalFlag        = "-!"
+	IdeaCategoryFlag      = "+c"
+	IdeaTextFlag          = "+t"
+)
+
 const HELP_MESSAGE = "WTF?\n```\n" +
 	`## Commands
 ## +: New Togo:
@@ -146,4 +159,34 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 
 	Show combined togo + task progress.
 
-*   Task reminder default is 4 times/day.` + "\n```"
+*   Task reminder default is 4 times/day.
+
+## Ideas (separate from togos and tasks):
+=>     *     text     [+! | -!]     [+c     category]     [...]
+
+	Add an idea. +! marks it high-priority (-! normal, default). +c sets a category.
+
+=>     ;     [...]
+
+	List all ideas.
+
+=>     ;     !     [...]
+
+	List only high-priority ideas.
+
+=>     ;     c     category     [...]
+
+	List ideas filtered by a category.
+
+=>     ;u     id     [+t     new_text]     [+! | -!]     [+c     category]     [...]
+
+	Get / update one idea by id. +t changes the idea text.
+
+=>     *x
+
+	Remove ideas using inline keyboard.
+
+## Guided menus (step by step):
+*   /addidea, /addtogo, /addtask open a guided wizard with inline buttons.
+*   /ideas, /togos, /tasks open a manage menu to edit or delete items.
+*   /cancel aborts the current guided menu.` + "\n```"

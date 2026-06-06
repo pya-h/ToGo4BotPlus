@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"strconv"
 	"time"
 	"unicode/utf8"
 
+	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
 
@@ -27,6 +29,7 @@ type TelegramResponse struct {
 
 type TelegramBotAPI struct {
 	*tgbotapi.BotAPI
+	flows *FlowStore // in-memory guided-flow (Type B) conversation state
 }
 
 func (telegramBotAPI *TelegramBotAPI) SendTextMessage(response TelegramResponse) {
@@ -42,6 +45,22 @@ func (telegramBotAPI *TelegramBotAPI) SendTextMessage(response TelegramResponse)
 
 }
 
+// SendTextMessageReturningID sends a message and returns the resulting Telegram
+// message id so guided flows can keep editing that same "wizard" message. It
+// deliberately sends as plain text (no Markdown) since flow prompts and summaries
+// may interpolate arbitrary user content.
+func (telegramBotAPI *TelegramBotAPI) SendTextMessageReturningID(response TelegramResponse) (int, error) {
+	msg := tgbotapi.NewMessage(response.TargetChatId, response.TextMsg)
+	msg.ReplyToMessageID = response.MessageRepliedTo
+	if response.InlineKeyboard != nil {
+		msg.ReplyMarkup = response.InlineKeyboard
+	} else if response.ReplyMarkup != nil {
+		msg.ReplyMarkup = response.ReplyMarkup
+	}
+	sent, err := telegramBotAPI.Send(msg)
+	return sent.MessageID, err
+}
+
 func (telegramBotAPI *TelegramBotAPI) EditTextMessage(response TelegramResponse) {
 	msg := tgbotapi.NewEditMessageText(response.TargetChatId, response.MessageBeingEditedId, response.TextMsg)
 	if response.InlineKeyboard != nil {
@@ -52,7 +71,37 @@ func (telegramBotAPI *TelegramBotAPI) EditTextMessage(response TelegramResponse)
 
 func NewTelegramBotAPI(token string) (*TelegramBotAPI, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
-	return &TelegramBotAPI{BotAPI: bot}, err
+	return &TelegramBotAPI{BotAPI: bot, flows: NewFlowStore()}, err
+}
+
+// registerBotCommands publishes the guided-flow slash commands to Telegram's
+// native "/" command list. This tgbotapi version predates SetMyCommands, so we
+// call the raw endpoint. Best-effort: failures are logged, not fatal.
+func (telegramBot *TelegramBotAPI) registerBotCommands() {
+	type botCommand struct {
+		Command     string `json:"command"`
+		Description string `json:"description"`
+	}
+	commands := []botCommand{
+		{"addidea", "Add an idea (guided)"},
+		{"addtogo", "Add a togo (guided)"},
+		{"addtask", "Add a task (guided)"},
+		{"ideas", "Manage your ideas"},
+		{"togos", "Manage your togos"},
+		{"tasks", "Manage your tasks"},
+		{"cancel", "Cancel the current guided menu"},
+		{"now", "Show current date/time"},
+	}
+	payload, err := json.Marshal(commands)
+	if err != nil {
+		log.Printf("could not encode bot commands: %v", err)
+		return
+	}
+	params := url.Values{}
+	params.Add("commands", string(payload))
+	if _, err := telegramBot.MakeRequest("setMyCommands", params); err != nil {
+		log.Printf("could not register bot commands: %v", err)
+	}
 }
 
 // ---------------------- Callback Structs & Functions --------------------------------
@@ -68,6 +117,17 @@ const (
 	ShowTaskPage
 	ShowTogoMenuPage
 	ShowTaskMenuPage
+	RemoveIdea
+	ShowIdeaMenuPage
+	FlowSelect
+	FlowCustom
+	FlowSkip
+	FlowBack
+	FlowConfirm
+	FlowCancel
+	FlowEdit
+	FlowDelete
+	FlowToggle
 )
 
 type CallbackData struct {
@@ -81,6 +141,7 @@ type CallbackData struct {
 	TaskReminderMode    bool        `json:"TR,omitempty"`
 	MenuPage            int         `json:"MP,omitempty"` // current page of a paginated tick/remove inline menu
 	MenuAction          UserAction  `json:"MX,omitempty"` // the tick/remove action a menu-navigation button should re-render
+	FlowOpt             int         `json:"FO,omitempty"` // selected option index within an active guided flow step
 }
 
 func (callbackData CallbackData) Json() string {
@@ -227,6 +288,7 @@ func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  +a"}},
 			{tgbotapi.KeyboardButton{Text: "~"}, tgbotapi.KeyboardButton{Text: "~  +i"}, tgbotapi.KeyboardButton{Text: "%  t"}},
 			{tgbotapi.KeyboardButton{Text: "✅T"}, tgbotapi.KeyboardButton{Text: "❌T"}, tgbotapi.KeyboardButton{Text: "~s  4"}},
+			{tgbotapi.KeyboardButton{Text: ";"}, tgbotapi.KeyboardButton{Text: ";  !"}, tgbotapi.KeyboardButton{Text: "*x"}},
 		}}
 }
 
@@ -372,6 +434,11 @@ func main() {
 	if err := Task.InitDatabase(); err != nil {
 		panic(err)
 	}
+	if err := Idea.InitDatabase(); err != nil {
+		panic(err)
+	}
+
+	bot.registerBotCommands()
 
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 30
