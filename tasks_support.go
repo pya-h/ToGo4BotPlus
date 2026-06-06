@@ -12,20 +12,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-const (
-	TaskAddCommand            = "^"
-	TaskListCommand           = "~"
-	TaskUpdateCommand         = "&"
-	TaskTickCommand           = "✅T"
-	TaskRemoveCommand         = "❌T"
-	TaskSettingsCommand       = "~s"
-	TaskIncludeInactiveToken  = "+i"
-	TaskStatsToken            = "t"
-	TaskBothStatsToken        = "b"
-	MaximumTaskMessageLength  = 3200
-	TaskReminderWarningPrefix = "Task reminder warning:"
-)
-
 var taskReminderLoadProblemNotified bool
 
 func BuildTaskProgressReport(tasks Task.TaskList, includeInactive bool, warning error) string {

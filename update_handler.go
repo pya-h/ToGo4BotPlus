@@ -1,0 +1,477 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
+
+	"ToGo4BotPlus/Task"
+	"ToGo4BotPlus/Togo"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+)
+
+func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
+	defer func() {
+		if panicErr := recover(); panicErr != nil {
+			log.Printf("Panic recovered while processing update: %v", panicErr)
+			telegramBot.InformAdmin(fmt.Sprintf("Panic during update processing: %v", panicErr))
+		}
+	}()
+
+	response := TelegramResponse{TextMsg: HELP_MESSAGE}
+
+	if update.Message != nil {
+		telegramBot.handleMessageUpdate(update.Message, &response)
+		telegramBot.SendTextMessage(response)
+		return
+	}
+
+	if update.CallbackQuery != nil {
+		telegramBot.handleCallbackUpdate(update.CallbackQuery, &response)
+		telegramBot.EditTextMessage(response)
+	}
+}
+
+func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message, response *TelegramResponse) {
+	response.ReplyMarkup = MainKeyboardMenu()
+	response.TargetChatId = message.Chat.ID
+	response.MessageRepliedTo = message.MessageID
+	terms := SplitArguments(message.Text)
+	numOfTerms := len(terms)
+
+	now := Togo.Today()
+	for i := 0; i < numOfTerms; i++ {
+		switch terms[i] {
+		case "+":
+			if i+1 < numOfTerms {
+				if togo, err := Togo.Extract(message.Chat.ID, terms[i+1:]); err == nil {
+					if togo.Id, err = togo.Save(); err == nil {
+						response.TextMsg = fmt.Sprint(now.Get(), ": DONE!")
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = err.Error()
+				}
+			} else {
+				response.TextMsg = "You must provide at least one Parameters!"
+			}
+		case TaskAddCommand:
+			if i+1 < numOfTerms {
+				if task, err := Task.Extract(message.Chat.ID, terms[i+1:]); err == nil {
+					if task.Id, err = task.Save(); err == nil {
+						response.TextMsg = fmt.Sprintf("Task #%d created.", task.Id)
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = err.Error()
+				}
+			} else {
+				response.TextMsg = "You must provide at least one task title/parameter."
+			}
+		case "#", "#️⃣":
+			justUndones := i+1 < numOfTerms && len(terms[i+1]) > 0 && terms[i+1][0] == '-'
+			allDays := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
+
+			togos, warning := Togo.Load(message.Chat.ID, !allDays, allDays && terms[i+1] == "-a")
+			if togos == nil {
+				if warning != nil {
+					log.Println(warning)
+				}
+				response.TextMsg = BuildTogoImportStatsReport(nil, allDays, justUndones, warning)
+				break
+			}
+
+			results := togos.ToString()
+			for j := range results {
+				if togos[j].Progress >= 100 {
+					if justUndones {
+						continue
+					}
+					response.TextMsg = fmt.Sprint("✅ ", results[j])
+				} else {
+					response.TextMsg = results[j]
+				}
+				telegramBot.SendTextMessage(*response)
+			}
+
+			response.TextMsg = BuildTogoImportStatsReport(togos, allDays, justUndones, warning)
+
+		case "%":
+			mode := ""
+			if i+1 < numOfTerms {
+				mode = strings.ToLower(terms[i+1])
+			}
+
+			switch mode {
+			case TaskStatsToken:
+				includeInactive := i+2 < numOfTerms && terms[i+2] == TaskIncludeInactiveToken
+				tasks, warning := Task.Load(message.Chat.ID, includeInactive, false)
+				if tasks == nil {
+					if warning != nil {
+						response.TextMsg = warning.Error()
+					} else {
+						response.TextMsg = "Could not calculate task progress."
+					}
+					break
+				}
+				response.TextMsg = BuildTaskProgressReport(tasks, includeInactive, warning)
+			case TaskBothStatsToken:
+				allDaysToken := ""
+				if i+2 < numOfTerms {
+					allDaysToken = terms[i+2]
+				}
+				allDays := allDaysToken == "+a" || allDaysToken == "-a"
+				includeInactive := i+3 < numOfTerms && terms[i+3] == TaskIncludeInactiveToken
+
+				togos, togoWarning := Togo.Load(message.Chat.ID, !allDays, allDays && allDaysToken == "-a")
+				tasks, taskWarning := Task.Load(message.Chat.ID, includeInactive, false)
+
+				parts := make([]string, 0)
+				if togos != nil {
+					parts = append(parts, BuildTogoProgressReport(togos, allDays, togoWarning))
+				} else if togoWarning != nil {
+					parts = append(parts, fmt.Sprintf("Togo progress unavailable: %s", togoWarning.Error()))
+				}
+				if tasks != nil {
+					parts = append(parts, BuildTaskProgressReport(tasks, includeInactive, taskWarning))
+				} else if taskWarning != nil {
+					parts = append(parts, fmt.Sprintf("Task progress unavailable: %s", taskWarning.Error()))
+				}
+				if len(parts) == 0 {
+					response.TextMsg = "No progress data available."
+				} else {
+					response.TextMsg = strings.Join(parts, "\n\n")
+				}
+			default:
+				allDays := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
+				togos, warning := Togo.Load(message.Chat.ID, !allDays, allDays && terms[i+1] == "-a")
+				if togos == nil {
+					if warning != nil {
+						log.Println(warning.Error())
+						response.TextMsg = warning.Error()
+					} else {
+						response.TextMsg = "Could not calculate togo progress."
+					}
+					telegramBot.SendTextMessage(*response)
+				} else {
+					response.TextMsg = BuildTogoProgressReport(togos, allDays, warning)
+				}
+			}
+		case "$":
+			var togos Togo.TogoList
+			var err error
+			if i+1 < numOfTerms {
+				togos, err = Togo.Load(message.Chat.ID, false, false)
+				if togos != nil {
+					if resp, err := togos.Update(message.Chat.ID, terms[i+1:]); err == nil {
+						response.TextMsg = resp
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = err.Error()
+				}
+			} else {
+				response.TextMsg = "You must provide the get identifier!"
+			}
+		case TaskUpdateCommand:
+			if i+1 < numOfTerms {
+				tasks, err := Task.Load(message.Chat.ID, true, true)
+				if tasks != nil {
+					if resp, err := tasks.Update(message.Chat.ID, terms[i+1:]); err == nil {
+						response.TextMsg = resp
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else if err != nil {
+					response.TextMsg = err.Error()
+				} else {
+					response.TextMsg = "Could not load tasks for update."
+				}
+			} else {
+				response.TextMsg = "You must provide the task identifier!"
+			}
+		case TaskListCommand:
+			includeInactive := i+1 < numOfTerms && terms[i+1] == TaskIncludeInactiveToken
+			tasks, warning := Task.Load(message.Chat.ID, includeInactive, false)
+			if tasks == nil {
+				if warning != nil {
+					response.TextMsg = warning.Error()
+				} else {
+					response.TextMsg = "Could not load tasks."
+				}
+				break
+			}
+
+			pages := BuildTaskPages(tasks, includeInactive, false, MaximumTaskMessageLength)
+			response.TextMsg = pages[0]
+			response.InlineKeyboard = TaskPageNavigationKeyboard(0, len(pages), includeInactive, false)
+			if warning != nil {
+				if len(response.TextMsg)+len(warning.Error())+12 < MaximumTaskMessageLength {
+					response.TextMsg = fmt.Sprintf("%s\n\nwarning: %s", response.TextMsg, warning.Error())
+				} else {
+					log.Printf("task list warning: %v", warning)
+				}
+			}
+		case "✅":
+			allDays := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
+			togos, err := Togo.Load(message.Chat.ID, !allDays, allDays && terms[i+1] == "-a")
+			if togos != nil {
+				if len(togos) >= 1 {
+					response.TextMsg = "Here are your togos for today:"
+					response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, allDays, allDays && terms[i+1] == "-a")
+				} else {
+					response.TextMsg = "No togos to tick!"
+				}
+				if err != nil {
+					response.TextMsg = fmt.Sprintln(response.TextMsg, "- - - - - - - - - - - - - - - - - - - - - - - -\nseems: ", err.Error())
+				}
+			} else {
+				response.TextMsg = err.Error()
+			}
+		case TaskTickCommand, "✅t":
+			includeInactive := i+1 < numOfTerms && terms[i+1] == TaskIncludeInactiveToken
+			tasks, warning := Task.Load(message.Chat.ID, includeInactive, false)
+			if tasks != nil {
+				if len(tasks) >= 1 {
+					response.TextMsg = "Here are your tasks to tick:"
+					response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, TickTask, includeInactive)
+				} else {
+					response.TextMsg = "No tasks to tick!"
+				}
+				if warning != nil {
+					response.TextMsg = fmt.Sprintf("%s\nwarning: %s", response.TextMsg, warning.Error())
+				}
+			} else if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load tasks for ticking."
+			}
+		case "❌":
+			var togos Togo.TogoList
+			var err error
+			allDays := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
+
+			if togos, err = Togo.Load(message.Chat.ID, !allDays, allDays && terms[i+1] == "-a"); togos == nil {
+				response.TextMsg = err.Error()
+				telegramBot.SendTextMessage(*response)
+			} else {
+				if len(togos) >= 1 {
+					response.TextMsg = "Here are your Today's togos:"
+					if allDays {
+						response.TextMsg = "Here are your ALL togos:"
+					}
+					if err != nil {
+						response.TextMsg = fmt.Sprintln(response.TextMsg, "- - - - - - - - - - - - - - - - - - - - - - - -\n", err.Error())
+					}
+					response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, allDays && terms[i+1] == "-a")
+				} else {
+					response.TextMsg = "No togos so far..."
+				}
+			}
+		case TaskRemoveCommand, "❌t":
+			includeInactive := i+1 < numOfTerms && terms[i+1] == TaskIncludeInactiveToken
+			tasks, warning := Task.Load(message.Chat.ID, includeInactive, false)
+			if tasks != nil {
+				if len(tasks) >= 1 {
+					response.TextMsg = "Here are your tasks to remove:"
+					response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, RemoveTask, includeInactive)
+				} else {
+					response.TextMsg = "No tasks so far..."
+				}
+				if warning != nil {
+					response.TextMsg = fmt.Sprintf("%s\nwarning: %s", response.TextMsg, warning.Error())
+				}
+			} else if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load tasks for removing."
+			}
+		case TaskSettingsCommand:
+			if i+1 < numOfTerms {
+				if times, err := strconv.Atoi(terms[i+1]); err == nil {
+					if err := Task.SetReminderTimes(message.Chat.ID, times); err == nil {
+						if times == 0 {
+							response.TextMsg = "Task reminders are now disabled (0 times/day)."
+						} else {
+							response.TextMsg = fmt.Sprintf("Task reminders updated to %d times/day.", times)
+						}
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = fmt.Sprintf("Usage: ~s  <times_per_day>\nAllowed values: %s", allowedTaskReminderValuesText())
+				}
+			} else if setting, err := Task.GetReminderSetting(message.Chat.ID); err == nil {
+				response.TextMsg = fmt.Sprintf("Current task reminder frequency: %d times/day\nAllowed values: %s", setting.RemindersPerDay, allowedTaskReminderValuesText())
+			} else {
+				response.TextMsg = err.Error()
+			}
+		case "/db":
+			if adminID, err := strconv.Atoi(env["ADMIN_ID"]); err == nil && int64(adminID) == response.TargetChatId {
+				msg := tgbotapi.NewDocumentUpload(int64(adminID), "./togos.db")
+				if _, err := telegramBot.Send(msg); err != nil {
+					response.TextMsg = err.Error()
+				} else {
+					response.TextMsg = "Successfully sent db!"
+				}
+			} else {
+				response.TextMsg = "get the fuck off my porch!"
+			}
+		case "/now":
+			response.TextMsg = now.Get()
+		}
+	}
+}
+
+func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.CallbackQuery, response *TelegramResponse) {
+	response.MessageBeingEditedId = callbackQuery.Message.MessageID
+	response.TargetChatId = callbackQuery.Message.Chat.ID
+	callbackData := LoadCallbackData(callbackQuery.Data)
+
+	switch callbackData.Action {
+	case TickTogo, RemoveTogo:
+		togos, err := Togo.Load(response.TargetChatId, !callbackData.AllDays, callbackData.JustUndones)
+		if togos == nil {
+			if err != nil {
+				response.TextMsg = err.Error()
+			} else {
+				response.TextMsg = "Could not load togos for callback action."
+			}
+			break
+		}
+
+		if err != nil {
+			response.TextMsg = err.Error()
+			telegramBot.SendTextMessage(*response)
+		}
+
+		if callbackData.Action == TickTogo {
+			togo, err := togos.Get(uint64(callbackData.ID))
+			if err != nil {
+				response.TextMsg = err.Error()
+				break
+			}
+			if togo.Progress < 100 {
+				togo.Progress = 100
+			} else {
+				togo.Progress = 0
+			}
+			_ = togo.Update(response.TargetChatId)
+			response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, callbackData.AllDays, callbackData.JustUndones)
+			response.TextMsg = "✅ DONE! Now select the next togo you want to tick ..."
+		} else {
+			updated, err := togos.Remove(response.TargetChatId, uint64(callbackData.ID))
+			if err != nil {
+				response.TextMsg = err.Error()
+				break
+			}
+			if len(updated) >= 1 {
+				response.TextMsg = "❌ DONE! Now select the next togo you want to REMOVE ..."
+				response.InlineKeyboard = InlineKeyboardMenu(updated, RemoveTogo, callbackData.AllDays, callbackData.JustUndones)
+			} else {
+				response.TextMsg = "❌ DONE! All removed."
+			}
+		}
+
+	case TickTask:
+		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		if tasks == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load tasks for ticking."
+			}
+			break
+		}
+
+		task, err := tasks.Get(uint64(callbackData.ID))
+		if err != nil {
+			response.TextMsg = err.Error()
+			break
+		}
+		if task.Progress < 100 {
+			task.Progress = 100
+		} else {
+			task.Progress = 0
+		}
+		if err := task.Update(response.TargetChatId); err != nil {
+			response.TextMsg = err.Error()
+			break
+		}
+
+		updated, warn2 := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		if updated == nil {
+			if warn2 != nil {
+				response.TextMsg = warn2.Error()
+			} else {
+				response.TextMsg = "Task updated, but refresh failed."
+			}
+			break
+		}
+		if len(updated) >= 1 {
+			response.TextMsg = "✅ Task updated. Pick the next task to tick ..."
+			response.InlineKeyboard = TaskInlineKeyboardMenu(updated, TickTask, callbackData.TaskIncludeInactive)
+		} else {
+			response.TextMsg = "✅ Task updated. No remaining tasks in this view."
+		}
+		if warn2 != nil {
+			response.TextMsg = fmt.Sprintf("%s\nwarning: %s", response.TextMsg, warn2.Error())
+		}
+
+	case RemoveTask:
+		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		if tasks == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load tasks for removal."
+			}
+			break
+		}
+
+		updated, err := tasks.Remove(response.TargetChatId, uint64(callbackData.ID))
+		if err != nil {
+			response.TextMsg = err.Error()
+			break
+		}
+		if len(updated) >= 1 {
+			response.TextMsg = "❌ Task removed. Pick the next task to remove ..."
+			response.InlineKeyboard = TaskInlineKeyboardMenu(updated, RemoveTask, callbackData.TaskIncludeInactive)
+		} else {
+			response.TextMsg = "❌ Task removed. All removed in this view."
+		}
+
+	case ShowTaskPage:
+		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		if tasks == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load tasks page."
+			}
+			break
+		}
+
+		pages := BuildTaskPages(tasks, callbackData.TaskIncludeInactive, callbackData.TaskReminderMode, MaximumTaskMessageLength)
+		page := callbackData.TaskPage
+		if page < 0 {
+			page = 0
+		}
+		if page >= len(pages) {
+			page = len(pages) - 1
+		}
+		response.TextMsg = pages[page]
+		response.InlineKeyboard = TaskPageNavigationKeyboard(page, len(pages), callbackData.TaskIncludeInactive, callbackData.TaskReminderMode)
+		if warning != nil {
+			response.TextMsg = fmt.Sprintf("%s\n\nwarning: %s", response.TextMsg, warning.Error())
+		}
+
+	default:
+		response.TextMsg = "Unsupported callback action."
+	}
+}

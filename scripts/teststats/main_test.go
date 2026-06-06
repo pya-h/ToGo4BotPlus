@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,5 +92,60 @@ func TestParseCoverageMissingFileReturnsEmpty(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Fatalf("expected no file coverage entries for missing file, got %d", len(files))
+	}
+}
+
+func captureMainStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed creating stdout pipe: %v", err)
+	}
+	os.Stdout = w
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed closing writer: %v", err)
+	}
+	os.Stdout = oldStdout
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("failed reading stdout: %v", err)
+	}
+	return string(out)
+}
+
+func TestMainEmitsAggregatedSummary(t *testing.T) {
+	jsonLines := strings.Join([]string{
+		`{"Time":"2026-06-06T10:00:00Z","Action":"run","Package":"ToGo4BotPlus","Test":"TestOne"}`,
+		`{"Time":"2026-06-06T10:00:01Z","Action":"pass","Package":"ToGo4BotPlus","Test":"TestOne","Elapsed":0.01}`,
+		`{"Time":"2026-06-06T10:00:02Z","Action":"pass","Package":"ToGo4BotPlus","Elapsed":0.02}`,
+	}, "\n")
+	jsonPath := writeTempFile(t, jsonLines)
+	coveragePath := writeTempFile(t, "total:\t\t\t\t\t(statements)\t11.1%\n")
+
+	oldArgs := os.Args
+	oldFlagSet := flag.CommandLine
+	defer func() {
+		os.Args = oldArgs
+		flag.CommandLine = oldFlagSet
+	}()
+
+	os.Args = []string{"teststats", "--json", jsonPath, "--coverage", coveragePath}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+
+	out := captureMainStdout(t, main)
+	if !strings.Contains(out, "=== Aggregated Test Stats ===") {
+		t.Fatalf("expected header in main output, got: %s", out)
+	}
+	if !strings.Contains(out, "Tests: run=1 pass=1 fail=0 skip=0") {
+		t.Fatalf("expected tests summary in main output, got: %s", out)
+	}
+	if !strings.Contains(out, "Coverage summary:") || !strings.Contains(out, "Total: 11.10%") {
+		t.Fatalf("expected coverage summary in main output, got: %s", out)
 	}
 }

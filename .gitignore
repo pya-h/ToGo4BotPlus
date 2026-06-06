@@ -5,6 +5,7 @@
 .env
 *.db
 tests
-ex
+!ex/tests/
+!ex/tests/**
 specs/
 .test-logs/
