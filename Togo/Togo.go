@@ -258,9 +258,12 @@ func (togos TogoList) Update(chatID int64, terms []string) (string, error) {
 		return "", errors.New("‼️there is no togo with this Id")
 	}
 	if len(terms) > 1 && !isCommand(terms[1]) {
-
-		togos[targetIdx].setFields(terms)
-		togos[targetIdx].Update(chatID)
+		if err := togos[targetIdx].setFields(terms); err != nil {
+			return "", err
+		}
+		if err := togos[targetIdx].Update(chatID); err != nil {
+			return "", err
+		}
 	}
 
 	return togos[targetIdx].ToString(), nil

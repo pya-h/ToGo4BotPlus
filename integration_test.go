@@ -19,9 +19,8 @@ func TestHandlerPanicsOnTrailingWeightFlag(t *testing.T) {
 	input := "+  task  ="
 	terms := SplitArguments(input)
 
-	// terms should be ["+", "task", "="]
-	if len(terms) < 1 {
-		t.Fatalf("SplitArguments returned empty slice")
+	if len(terms) != 3 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
 	}
 
 	// Simulate the main.go handler logic for + command
@@ -42,6 +41,9 @@ func TestHandlerPanicsOnTrailingWeightFlag(t *testing.T) {
 func TestHandlerPanicsOnTrailingDescriptionFlag(t *testing.T) {
 	input := "+  task  :"
 	terms := SplitArguments(input)
+	if len(terms) != 3 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
+	}
 
 	if terms[0] == "+" && len(terms) > 1 {
 		togo, err := Togo.Extract(int64(123), terms[1:])
@@ -56,6 +58,9 @@ func TestHandlerPanicsOnTrailingDescriptionFlag(t *testing.T) {
 func TestHandlerPanicsOnTrailingProgressFlag(t *testing.T) {
 	input := "+  task  +p"
 	terms := SplitArguments(input)
+	if len(terms) != 3 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
+	}
 
 	if terms[0] == "+" && len(terms) > 1 {
 		togo, err := Togo.Extract(int64(123), terms[1:])
@@ -70,6 +75,9 @@ func TestHandlerPanicsOnTrailingProgressFlag(t *testing.T) {
 func TestHandlerPanicsOnTrailingDateFlag(t *testing.T) {
 	input := "+  task  @"
 	terms := SplitArguments(input)
+	if len(terms) != 3 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
+	}
 
 	if terms[0] == "+" && len(terms) > 1 {
 		togo, err := Togo.Extract(int64(123), terms[1:])
@@ -84,6 +92,9 @@ func TestHandlerPanicsOnTrailingDateFlag(t *testing.T) {
 func TestHandlerPanicsOnDateFlagWithDayOnly(t *testing.T) {
 	input := "+  task  @  1"
 	terms := SplitArguments(input)
+	if len(terms) != 4 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
+	}
 
 	if terms[0] == "+" && len(terms) > 1 {
 		togo, err := Togo.Extract(int64(123), terms[1:])
@@ -98,6 +109,9 @@ func TestHandlerPanicsOnDateFlagWithDayOnly(t *testing.T) {
 func TestHandlerPanicsOnTrailingDurationFlag(t *testing.T) {
 	input := "+  task  ->"
 	terms := SplitArguments(input)
+	if len(terms) != 3 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
+	}
 
 	if terms[0] == "+" && len(terms) > 1 {
 		togo, err := Togo.Extract(int64(123), terms[1:])
@@ -110,45 +124,60 @@ func TestHandlerPanicsOnTrailingDurationFlag(t *testing.T) {
 
 // TestHandlerPanicsOnCommandAfterPlus - B1: + # should not panic
 func TestHandlerPanicsOnCommandAfterPlus(t *testing.T) {
-	input := "+ #"
+	input := "+  #"
 	terms := SplitArguments(input)
 
+	if len(terms) != 2 || terms[0] != "+" {
+		t.Fatalf("SplitArguments parsed unexpected terms: %#v", terms)
+	}
+
 	if terms[0] == "+" && len(terms) > 1 {
-		// Extract gets [#] which should be handled as invalid title (not a command)
+		// Extract gets [#]; it should not panic.
 		togo, err := Togo.Extract(int64(123), terms[1:])
 		if err != nil {
-			// Error is expected since # is not a valid togo title
-			// What matters is: did it panic? (it shouldn't)
-			t.Logf("Extract returned error as expected: %v", err)
+			t.Fatalf("unexpected error for command-like title: %v", err)
 		}
-		// If we reach here, no panic occurred - test passes
+		if togo.Title != "#" {
+			t.Fatalf("expected title '#', got %q", togo.Title)
+		}
 		_ = togo
 	}
 }
 
 // TestHandlerReturnsErrorNotPanic - B1: Invalid input returns error not panic
 func TestHandlerReturnsErrorNotPanic(t *testing.T) {
-	badInputs := []string{
-		"+ ",        // Plus with nothing
-		"+",         // Plus alone
-		"+ task =",  // Trailing weight flag
-		"+ task :",  // Trailing description flag
-		"+ task +p", // Trailing progress flag
-		"+ task @",  // Trailing date flag
-		"+ task ->", // Trailing duration flag
+	testCases := []struct {
+		input       string
+		expectTerms int
+		expectErr   bool
+	}{
+		{input: "+", expectTerms: 1, expectErr: false},
+		{input: "+  task  =", expectTerms: 3, expectErr: true},
+		{input: "+  task  :", expectTerms: 3, expectErr: true},
+		{input: "+  task  +p", expectTerms: 3, expectErr: true},
+		{input: "+  task  @", expectTerms: 3, expectErr: true},
+		{input: "+  task  ->", expectTerms: 3, expectErr: true},
 	}
 
-	for _, input := range badInputs {
-		terms := SplitArguments(input)
+	for _, tc := range testCases {
+		terms := SplitArguments(tc.input)
+		if len(terms) != tc.expectTerms {
+			t.Fatalf("SplitArguments(%q) = %#v, expected %d terms", tc.input, terms, tc.expectTerms)
+		}
+		if terms[0] != "+" {
+			t.Fatalf("expected first token '+' for input %q, got %#v", tc.input, terms)
+		}
 
-		if len(terms) > 0 && terms[0] == "+" {
-			if len(terms) > 1 {
-				togo, err := Togo.Extract(int64(123), terms[1:])
-				// Main thing: no panic occurs
-				_ = err
-				_ = togo
-			}
-			// Empty extract should return error
+		if len(terms) == 1 {
+			continue
+		}
+
+		togo, err := Togo.Extract(int64(123), terms[1:])
+		if tc.expectErr && err == nil {
+			t.Fatalf("expected error for input %q, got togo=%+v", tc.input, togo)
+		}
+		if !tc.expectErr && err != nil {
+			t.Fatalf("unexpected error for input %q: %v", tc.input, err)
 		}
 	}
 }

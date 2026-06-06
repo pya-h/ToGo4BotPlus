@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"ToGo4BotPlus/Togo"
 
@@ -100,13 +101,16 @@ func truncateUTF8(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
 	}
-	// Truncate to maxBytes, then ensure we don't split a multi-byte rune
-	truncated := s[:maxBytes]
-	// Check if the last byte is part of a multi-byte sequence
-	for len(truncated) > 0 && (truncated[len(truncated)-1]&0xC0) == 0x80 {
-		truncated = truncated[:len(truncated)-1]
+
+	for maxBytes > 0 {
+		truncated := s[:maxBytes]
+		if utf8.ValidString(truncated) {
+			return truncated
+		}
+		maxBytes--
 	}
-	return truncated
+
+	return ""
 }
 
 func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, justUndones bool) (inlineKeyboard *tgbotapi.InlineKeyboardMarkup) {
@@ -153,10 +157,52 @@ func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 	return &tgbotapi.ReplyKeyboardMarkup{ResizeKeyboard: true,
 		OneTimeKeyboard: false,
 		Keyboard: [][]tgbotapi.KeyboardButton{{tgbotapi.KeyboardButton{Text: "#️⃣"}, tgbotapi.KeyboardButton{Text: "#️⃣  -"}, tgbotapi.KeyboardButton{Text: "#️⃣  +a"}, tgbotapi.KeyboardButton{Text: "#️⃣  -a"}},
-			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  -a"}, tgbotapi.KeyboardButton{Text: "✅  a"}},
-			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  a"}},
-			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  a"}},
+			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  -a"}, tgbotapi.KeyboardButton{Text: "✅  +a"}},
+			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  +a"}},
+			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  +a"}},
 		}}
+}
+
+func BuildTogoImportStatsReport(togos Togo.TogoList, allDays bool, justUndones bool, warning error) string {
+	scope := "Today"
+	if allDays {
+		scope = "All days"
+	}
+
+	imported := len(togos)
+	shown := 0
+	done := 0
+	pending := 0
+	totalProgress := 0
+
+	for _, togo := range togos {
+		if justUndones && togo.Progress >= 100 {
+			continue
+		}
+		shown++
+		totalProgress += int(togo.Progress)
+		if togo.Progress >= 100 {
+			done++
+		} else {
+			pending++
+		}
+	}
+
+	averageProgress := 0.0
+	if shown > 0 {
+		averageProgress = float64(totalProgress) / float64(shown)
+	}
+
+	report := fmt.Sprintf("%s report\nImported togos: %d\nShown: %d\nDone: %d\nPending: %d\nAverage progress: %.2f%%",
+		scope, imported, shown, done, pending, averageProgress)
+
+	if warning != nil {
+		report = fmt.Sprintf("%s\nWarning: %s", report, warning.Error())
+	} else if shown == 0 {
+		report = fmt.Sprintf("%s\nStatus: Nothing to show.", report)
+	}
+
+	return report
 }
 
 func SplitArguments(statement string) []string {
@@ -189,37 +235,49 @@ func (telegramBot *TelegramBotAPI) InformAdmin(news string) {
 	}
 }
 
+func togosDueAtNextMinute(togos Togo.TogoList, now Togo.Date) Togo.TogoList {
+	nextMinute := (Togo.Date{Time: now.Add(time.Minute)}).ToLocal()
+	due := make(Togo.TogoList, 0)
+	for _, togo := range togos {
+		if togo.Date.Get() == nextMinute.Get() {
+			due = due.Add(&togo)
+		}
+	}
+	return due
+}
+
+func (telegramBot *TelegramBotAPI) processNotificationTick(notifiedAboutCorruption *bool, notifiedAboutLoadProblem *bool) {
+	if togos, err := Togo.LoadEverybodysToday(); togos != nil {
+		*notifiedAboutLoadProblem = false
+		if err != nil {
+			if !*notifiedAboutCorruption {
+				*notifiedAboutCorruption = true
+
+				telegramBot.InformAdmin(fmt.Sprintln(err.Error(), "; this means the notification may encounter some problems on notifying some togos."))
+			}
+		} else {
+			*notifiedAboutCorruption = false
+		}
+
+		for _, togo := range togosDueAtNextMinute(togos, Togo.Today()) {
+			response := TelegramResponse{TextMsg: togo.ToString(), TargetChatId: togo.OwnerId} // default method is sendMessage
+			telegramBot.SendTextMessage(response)
+		}
+	} else {
+		if !*notifiedAboutLoadProblem {
+			*notifiedAboutLoadProblem = true
+			telegramBot.InformAdmin(err.Error())
+		}
+	}
+}
+
 func (telegramBot *TelegramBotAPI) NotifyRightNowTogos() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 	notified_about_curroption := false
 	notified_about_load_problem := false
 	for range ticker.C {
-		if togos, err := Togo.LoadEverybodysToday(); togos != nil {
-			notified_about_load_problem = false
-			if err != nil {
-				if !notified_about_curroption {
-					notified_about_curroption = true
-
-					telegramBot.InformAdmin(fmt.Sprintln(err.Error(), "; this means the notification may encounter some problems on notifying some togos."))
-				}
-			} else {
-				notified_about_curroption = false
-			}
-			nextMinute := (Togo.Date{Time: Togo.Today().Add(time.Minute * time.Duration(1))}).ToLocal()
-
-			for _, togo := range togos {
-				if togo.Date.Get() == nextMinute.Get() {
-					response := TelegramResponse{TextMsg: togo.ToString(), TargetChatId: togo.OwnerId} // default method is sendMessage
-					telegramBot.SendTextMessage(response)
-				}
-			}
-		} else {
-			if !notified_about_load_problem {
-				notified_about_load_problem = true
-				telegramBot.InformAdmin(err.Error())
-			}
-		}
+		telegramBot.processNotificationTick(&notified_about_curroption, &notified_about_load_problem)
 	}
 }
 
@@ -347,7 +405,7 @@ func main() {
 				for i := 0; i < numOfTerms; i++ {
 					switch terms[i] {
 					case "+":
-						if numOfTerms > 1 {
+						if i+1 < numOfTerms {
 							if togo, err := Togo.Extract(update.Message.Chat.ID, terms[i+1:]); err == nil {
 								if togo.Id, err = togo.Save(); err == nil {
 									response.TextMsg = fmt.Sprint(now.Get(), ": DONE!")
@@ -361,37 +419,32 @@ func main() {
 							response.TextMsg = "You must provide at least one Parameters!"
 						}
 					case "#", "#️⃣":
-						var results []string
-						just_undones := i+1 < numOfTerms && terms[i+1][0] == '-'
-						all_days := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
+						justUndones := i+1 < numOfTerms && len(terms[i+1]) > 0 && terms[i+1][0] == '-'
+						allDays := i+1 < numOfTerms && (terms[i+1] == "+a" || terms[i+1] == "-a")
 
-						togos, warning := Togo.Load(update.Message.Chat.ID, !all_days, all_days && terms[i+1] == "-a")
+						togos, warning := Togo.Load(update.Message.Chat.ID, !allDays, allDays && terms[i+1] == "-a")
 						if togos == nil {
-							log.Println(warning)
-							response.TextMsg = warning.Error()
+							if warning != nil {
+								log.Println(warning)
+							}
+							response.TextMsg = BuildTogoImportStatsReport(nil, allDays, justUndones, warning)
+							break
+						}
+
+						results := togos.ToString()
+						for j := range results {
+							if togos[j].Progress >= 100 {
+								if justUndones {
+									continue
+								}
+								response.TextMsg = fmt.Sprint("✅ ", results[j])
+							} else {
+								response.TextMsg = results[j]
+							}
 							bot.SendTextMessage(response)
 						}
-						results = togos.ToString()
-						if len(results) > 0 {
-							for i := range results {
-								if togos[i].Progress >= 100 {
-									if just_undones {
-										continue
-									}
-									response.TextMsg = fmt.Sprint("✅ ", results[i])
-								} else {
-									response.TextMsg = results[i]
-								}
-								bot.SendTextMessage(response)
-							}
-							if warning == nil {
-								response.TextMsg = "✅!"
-							} else {
-								response.TextMsg = warning.Error()
-							}
-						} else {
-							response.TextMsg = "Nothing!"
-						}
+
+						response.TextMsg = BuildTogoImportStatsReport(togos, allDays, justUndones, warning)
 
 					case "%":
 						var togos Togo.TogoList

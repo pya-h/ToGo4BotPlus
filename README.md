@@ -1,7 +1,7 @@
 # Togo4: On Street/Service Project
-    Telegram bot (By webhook) version of TogoFor. for managing my todos, in order to make me go for them.
-    With many extra features and Memory/Performance & Coding optimization.
-    This bot application is running on Vercel as a Serverless Function bot.
+    Telegram long-polling bot version of TogoFor, for managing my todos.
+    Includes scheduling, inline/reply keyboards, and SQLite persistence.
+    This branch is the long-polling runtime (not the Vercel serverless variant).
 # Project Properties:
 * Language: golang
 * Branches: This repository has 3 branches, each one is a different design and uses a special mechanism.
@@ -32,9 +32,9 @@
 # Notes:
 * Here command/param seperator is 2 SPACES (because telegram doesnt have a specific tab character)
 * More than 2 spaces is still part of the arguments; Separator is Exactly 2 spaces; nothing more of less!
-* Set these Environmental Variables for start:
-TELEGRAM_TOKEN=token
-POSTGRES_URL=postgres connection string
+* Set these environmental variables in `.env` before startup:
+TOKEN=telegram bot token
+ADMIN_ID=telegram user id to receive admin notifications
 
 # Markup Keyboard
 
@@ -245,24 +245,76 @@ Shows today's togos, updates task 1, shows all togos.
 go test ./...
 ```
 
-This runs all unit tests and integration tests across the project.
+This runs all unit tests and integration-style tests across the project.
 
 ### Run Specific Test Suites
 
-Unit tests for Togo package:
+Unit tests for core domain and DB logic:
 ```bash
 go test -v ./Togo
 ```
 
-Integration tests (bounds checking, panic recovery, etc.):
+Unit tests for test-stats parser tooling:
 ```bash
-go test -v -run Integration
+go test -v ./scripts/teststats
+```
+
+Integration-style parser/handler safety tests:
+```bash
+go test -v -run 'Handler|SplitArgumentsIntegration|ExtractRejectsAllTrailingFlags|ExtractAcceptsValidInput' .
 ```
 
 B1 bounds checking tests specifically:
 ```bash
 go test -v -run Handler integration_test.go main.go main_test.go
 ```
+
+### Full Stats & Logs Script
+
+```bash
+./scripts/run_all_tests_with_stats.sh
+```
+
+This script runs four phases:
+1. `go test -json ./...` and saves raw JSON events
+2. `go test -coverprofile=... ./...` and captures coverage profile
+3. `go tool cover -func` breakdown
+4. `go run ./scripts/teststats` aggregation report
+
+Artifacts are saved in a timestamped directory under `.test-logs/`:
+- `go-test.jsonl`
+- `coverage.out`
+- `coverage.func.txt`
+- `summary.txt`
+
+### Test Stats Parser Tool
+
+The parser behind the summary script lives at `scripts/teststats/main.go` and can be run directly:
+
+```bash
+go run ./scripts/teststats --json .test-logs/<run-id>/go-test.jsonl --coverage .test-logs/<run-id>/coverage.func.txt
+```
+
+It reports:
+- Package pass/fail/other totals
+- Test run/pass/fail/skip totals
+- Wall-clock duration from test JSON events
+- Top slowest tests
+- Lowest covered files (average by function)
+
+### Coverage Confidence Map (Current Scope)
+
+| Project Area | Coverage Status | Test Location(s) |
+|--------------|-----------------|------------------|
+| Command parsing and keyboard/report helpers (`main.go`) | High (core helper/runtime paths covered) | `main_test.go`, `integration_test.go` |
+| Domain parsing, DB CRUD, stats (`Togo/Togo.go`) | High | `Togo/Togo_test.go` |
+| JSON/coverage aggregation tooling (`scripts/teststats/main.go`) | Medium-High | `scripts/teststats/main_test.go` |
+| Long-running bot entry loop (`main.go:main`, perpetual scheduler loop wrapper) | Integration/runtime only | Manual run + bot runtime |
+| Example/demo files (`ex/`) | Not targeted | N/A |
+
+Notes:
+- The highest-risk business logic now has direct tests.
+- Remaining untested paths are runtime entrypoints or demo/example files, not core business rules.
 
 ### Build
 
