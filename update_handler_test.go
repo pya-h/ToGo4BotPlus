@@ -398,3 +398,194 @@ func TestHandleUpdateCallbackMatrix(t *testing.T) {
 		t.Fatalf("expected ShowTaskPage callback to clamp and render page, got %q", showPageText)
 	}
 }
+
+// countMenuButtons walks an inline keyboard and splits the buttons into item
+// buttons (tick/remove) and navigation buttons (page hops).
+func countMenuButtons(menu *tgbotapi.InlineKeyboardMarkup) (items int, navButtons int) {
+	for _, row := range menu.InlineKeyboard {
+		for _, button := range row {
+			if button.CallbackData == nil {
+				continue
+			}
+			switch LoadCallbackData(*button.CallbackData).Action {
+			case ShowTogoMenuPage, ShowTaskMenuPage:
+				navButtons++
+			default:
+				items++
+			}
+		}
+	}
+	return
+}
+
+func TestInlineKeyboardMenuPaginatesTogos(t *testing.T) {
+	total := MaximumInlineMenuItems + 5
+	togos := make(Togo.TogoList, 0, total)
+	for i := 0; i < total; i++ {
+		togos = append(togos, Togo.Togo{Id: uint64(i + 1), Title: fmt.Sprintf("togo-%d", i+1)})
+	}
+
+	first := InlineKeyboardMenu(togos, TickTogo, false, false, 0)
+	items, nav := countMenuButtons(first)
+	if items != MaximumInlineMenuItems {
+		t.Fatalf("page 0 expected %d item buttons, got %d", MaximumInlineMenuItems, items)
+	}
+	if nav < 1 {
+		t.Fatal("page 0 expected navigation buttons for an oversized list")
+	}
+	// Item buttons on page 0 must carry MenuPage 0 so a tick re-renders the same page.
+	if got := LoadCallbackData(*first.InlineKeyboard[0][0].CallbackData); got.MenuPage != 0 {
+		t.Fatalf("expected item button to carry MenuPage 0, got %d", got.MenuPage)
+	}
+
+	second := InlineKeyboardMenu(togos, TickTogo, false, false, 1)
+	items, _ = countMenuButtons(second)
+	if items != 5 {
+		t.Fatalf("page 1 expected the 5 remaining item buttons, got %d", items)
+	}
+	if got := LoadCallbackData(*second.InlineKeyboard[0][0].CallbackData); got.MenuPage != 1 {
+		t.Fatalf("expected page-1 item button to carry MenuPage 1, got %d", got.MenuPage)
+	}
+
+	// Out-of-range pages clamp to the last available page.
+	clamped := InlineKeyboardMenu(togos, TickTogo, false, false, 99)
+	items, _ = countMenuButtons(clamped)
+	if items != 5 {
+		t.Fatalf("clamped page expected 5 item buttons (last page), got %d", items)
+	}
+
+	// A small list stays single-page with no navigation row.
+	small := InlineKeyboardMenu(togos[:2], TickTogo, false, false, 0)
+	if _, nav := countMenuButtons(small); nav != 0 {
+		t.Fatalf("single-page list should have no navigation buttons, got %d", nav)
+	}
+}
+
+func TestTaskInlineKeyboardMenuPaginates(t *testing.T) {
+	total := MaximumInlineMenuItems + 3
+	tasks := make(Task.TaskList, 0, total)
+	for i := 0; i < total; i++ {
+		tasks = append(tasks, Task.Task{Id: uint64(i + 1), Title: fmt.Sprintf("task-%d", i+1)})
+	}
+
+	first := TaskInlineKeyboardMenu(tasks, RemoveTask, false, 0)
+	items, nav := countMenuButtons(first)
+	if items != MaximumInlineMenuItems {
+		t.Fatalf("page 0 expected %d task buttons, got %d", MaximumInlineMenuItems, items)
+	}
+	if nav < 1 {
+		t.Fatal("page 0 expected navigation buttons for an oversized task list")
+	}
+
+	last := TaskInlineKeyboardMenu(tasks, RemoveTask, false, 1)
+	if items, _ := countMenuButtons(last); items != 3 {
+		t.Fatalf("page 1 expected 3 task buttons, got %d", items)
+	}
+}
+
+func TestHandleUpdateTickTogoByID(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(8300)
+	id := seedTogo(t, chatID, "quick-tick-togo", 0)
+
+	text := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 500, fmt.Sprintf("tk  %d", id))
+	if !strings.Contains(text, "ticked") || strings.Contains(text, "unticked") {
+		t.Fatalf("expected ticked confirmation, got %q", text)
+	}
+
+	togos, _ := Togo.Load(chatID, false, false)
+	togo, err := togos.Get(id)
+	if err != nil {
+		t.Fatalf("failed to reload ticked togo: %v", err)
+	}
+	if togo.Progress != 100 {
+		t.Fatalf("expected togo progress 100 after tk, got %d", togo.Progress)
+	}
+
+	text = sendTextUpdateAndGetLastText(t, bot, transport, chatID, 501, fmt.Sprintf("tk  %d", id))
+	if !strings.Contains(text, "unticked") {
+		t.Fatalf("expected unticked confirmation on second tk, got %q", text)
+	}
+	togos, _ = Togo.Load(chatID, false, false)
+	togo, _ = togos.Get(id)
+	if togo.Progress != 0 {
+		t.Fatalf("expected togo progress 0 after toggle, got %d", togo.Progress)
+	}
+}
+
+func TestHandleUpdateTickTaskByID(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(8301)
+	id := seedTask(t, chatID, "quick-tick-task", 0)
+
+	text := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 510, fmt.Sprintf("TK  %d", id))
+	if !strings.Contains(text, "ticked") || strings.Contains(text, "unticked") {
+		t.Fatalf("expected ticked confirmation, got %q", text)
+	}
+
+	tasks, _ := Task.Load(chatID, true, true)
+	task, err := tasks.Get(id)
+	if err != nil {
+		t.Fatalf("failed to reload ticked task: %v", err)
+	}
+	if task.Progress != 100 {
+		t.Fatalf("expected task progress 100 after TK, got %d", task.Progress)
+	}
+
+	text = sendTextUpdateAndGetLastText(t, bot, transport, chatID, 511, fmt.Sprintf("TK  %d", id))
+	if !strings.Contains(text, "unticked") {
+		t.Fatalf("expected unticked confirmation on second TK, got %q", text)
+	}
+}
+
+func TestHandleUpdateTickByIDErrorCases(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(8302)
+
+	cases := []struct {
+		input          string
+		expectContains string
+	}{
+		{input: "tk", expectContains: "Usage: tk  <togo_id>"},
+		{input: "TK", expectContains: "Usage: TK  <task_id>"},
+		{input: "tk  abc", expectContains: "Invalid togo id"},
+		{input: "TK  abc", expectContains: "Invalid task id"},
+		{input: "tk  99999", expectContains: "can not find this togo"},
+		{input: "TK  99999", expectContains: "can not find this task"},
+	}
+	for i, tc := range cases {
+		text := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 520+i, tc.input)
+		if !strings.Contains(text, tc.expectContains) {
+			t.Fatalf("input %q expected response to contain %q, got %q", tc.input, tc.expectContains, text)
+		}
+	}
+}
+
+func TestHandleUpdateShowMenuPageCallbacks(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	ownerID := int64(8303)
+	seedTogo(t, ownerID, "page-togo-1", 0)
+	seedTogo(t, ownerID, "page-togo-2", 0)
+	seedTask(t, ownerID, "page-task-1", 0)
+	seedTask(t, ownerID, "page-task-2", 0)
+
+	cases := []struct {
+		payload        string
+		expectContains string
+	}{
+		{payload: (CallbackData{Action: ShowTogoMenuPage, MenuAction: TickTogo, MenuPage: 0}).Json(), expectContains: "Select a togo to tick"},
+		{payload: (CallbackData{Action: ShowTogoMenuPage, MenuAction: RemoveTogo, MenuPage: 0}).Json(), expectContains: "Select a togo to remove"},
+		{payload: (CallbackData{Action: ShowTaskMenuPage, MenuAction: TickTask, MenuPage: 0, TaskIncludeInactive: true}).Json(), expectContains: "Select a task to tick"},
+		{payload: (CallbackData{Action: ShowTaskMenuPage, MenuAction: RemoveTask, MenuPage: 0, TaskIncludeInactive: true}).Json(), expectContains: "Select a task to remove"},
+	}
+	for i, tc := range cases {
+		text := sendCallbackAndGetEditedText(t, bot, transport, ownerID, 600+i, tc.payload)
+		if !strings.Contains(text, tc.expectContains) {
+			t.Fatalf("callback %q expected response to contain %q, got %q", tc.payload, tc.expectContains, text)
+		}
+	}
+}

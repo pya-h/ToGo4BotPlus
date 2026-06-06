@@ -148,42 +148,59 @@ func TaskPageNavigationKeyboard(page int, total int, includeInactive bool, remin
 	return &menu
 }
 
-func TaskInlineKeyboardMenu(tasks Task.TaskList, action UserAction, includeInactive bool) *tgbotapi.InlineKeyboardMarkup {
-	count := len(tasks)
-	if count == 0 {
+func TaskInlineKeyboardMenu(tasks Task.TaskList, action UserAction, includeInactive bool, page int) *tgbotapi.InlineKeyboardMarkup {
+	total := len(tasks)
+	if total == 0 {
 		return nil
 	}
 
-	rowsCount := int(count / MaximumNumberOfRowItems)
+	totalPages := menuPageCount(total)
+	if page < 0 {
+		page = 0
+	}
+	if page >= totalPages {
+		page = totalPages - 1
+	}
+
+	start := page * MaximumInlineMenuItems
+	end := start + MaximumInlineMenuItems
+	if end > total {
+		end = total
+	}
+	pageItems := tasks[start:end]
+	count := len(pageItems)
+
+	rowsCount := count / MaximumNumberOfRowItems
 	if count%MaximumNumberOfRowItems != 0 {
 		rowsCount++
 	}
 
-	menu := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, rowsCount)}
-	col := 0
-	row := 0
-	for i := range tasks {
-		if col == 0 {
-			if row < rowsCount-1 {
-				menu.InlineKeyboard[row] = make([]tgbotapi.InlineKeyboardButton, MaximumNumberOfRowItems)
-			} else {
-				menu.InlineKeyboard[row] = make([]tgbotapi.InlineKeyboardButton, count-row*MaximumNumberOfRowItems)
+	menu := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, 0, rowsCount+1)}
+	for r := 0; r < rowsCount; r++ {
+		rowStart := r * MaximumNumberOfRowItems
+		rowEnd := rowStart + MaximumNumberOfRowItems
+		if rowEnd > count {
+			rowEnd = count
+		}
+		buttons := make([]tgbotapi.InlineKeyboardButton, 0, rowEnd-rowStart)
+		for k := rowStart; k < rowEnd; k++ {
+			status := ""
+			if pageItems[k].Progress >= 100 {
+				status = "✅ "
 			}
-			row++
-		}
+			title := fmt.Sprintf("%s%s", status, pageItems[k].Title)
+			if len(title) >= MaximumInlineButtonTextLength {
+				title = fmt.Sprintf("%s...", truncateUTF8(title, MaximumInlineButtonTextLength-3))
+			}
 
-		status := ""
-		if tasks[i].Progress >= 100 {
-			status = "✅ "
+			data := (CallbackData{Action: action, ID: int64(pageItems[k].Id), TaskIncludeInactive: includeInactive, MenuPage: page}).Json()
+			buttons = append(buttons, tgbotapi.InlineKeyboardButton{Text: title, CallbackData: &data})
 		}
-		title := fmt.Sprintf("%s%s", status, tasks[i].Title)
-		if len(title) >= MaximumInlineButtonTextLength {
-			title = fmt.Sprintf("%s...", truncateUTF8(title, MaximumInlineButtonTextLength-3))
-		}
+		menu.InlineKeyboard = append(menu.InlineKeyboard, buttons)
+	}
 
-		data := (CallbackData{Action: action, ID: int64(tasks[i].Id), TaskIncludeInactive: includeInactive}).Json()
-		menu.InlineKeyboard[row-1][col] = tgbotapi.InlineKeyboardButton{Text: title, CallbackData: &data}
-		col = (col + 1) % MaximumNumberOfRowItems
+	if navRow := buildMenuNavRow(ShowTaskMenuPage, action, page, totalPages, CallbackData{TaskIncludeInactive: includeInactive}); navRow != nil {
+		menu.InlineKeyboard = append(menu.InlineKeyboard, navRow)
 	}
 
 	return &menu

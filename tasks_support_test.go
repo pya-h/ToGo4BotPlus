@@ -85,7 +85,7 @@ func TestTaskInlineKeyboardMenuBuildsRowsAndCallbackData(t *testing.T) {
 		{Id: 4, Title: "Fourth", Progress: 0},
 	}
 
-	menu := TaskInlineKeyboardMenu(tasks, TickTask, true)
+	menu := TaskInlineKeyboardMenu(tasks, TickTask, true, 0)
 	if menu == nil {
 		t.Fatal("expected inline keyboard for non-empty task list")
 	}
@@ -126,7 +126,7 @@ func TestTaskInlineKeyboardMenuBuildsRowsAndCallbackData(t *testing.T) {
 }
 
 func TestTaskInlineKeyboardMenuReturnsNilForEmptyList(t *testing.T) {
-	if menu := TaskInlineKeyboardMenu(nil, TickTask, false); menu != nil {
+	if menu := TaskInlineKeyboardMenu(nil, TickTask, false, 0); menu != nil {
 		t.Fatalf("expected nil keyboard for empty list, got: %+v", menu)
 	}
 }

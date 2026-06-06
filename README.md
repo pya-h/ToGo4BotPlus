@@ -166,6 +166,25 @@ Click any togo button to delete it.
 
 ---
 
+## `tk` Quick Tick Togo
+
+Toggle a togo's completion by id, without opening the inline keyboard.
+
+**Syntax:**
+```
+tk  id
+```
+
+Toggles togo `#id` between done (100%) and not done (0%). Works for togos on any day.
+
+**Examples:**
+```
+tk  1
+tk  42
+```
+
+---
+
 ## `$` Get/Update Togo
 
 Retrieve and update a specific togo by ID.
@@ -226,6 +245,7 @@ Shows today's togos, updates task 1, shows all togos.
 | `%` | `-` | Progress for incomplete togos (today) |
 | `%` | `+a` | Progress for all togos (all days) |
 | `%` | `-a` | Progress for all incomplete togos (all days) |
+| `tk` | `id` | Toggle completion of togo by id (no keyboard) |
 | `✅` | (default) | Tick/complete today's togos |
 | `✅` | `-a` | Tick/complete all days' togos |
 | `❌` | (default) | Remove today's togos |
@@ -283,6 +303,12 @@ Remove tasks with inline keyboard:
 ❌T
 ```
 
+Quick tick a task by id (toggle done/undone) without the inline keyboard:
+
+```bash
+TK  id
+```
+
 Task-only progress:
 
 ```bash
@@ -319,6 +345,16 @@ Task list and reminder messages are automatically paginated when too long.
 
 - Use inline `Next` / `Prev` buttons under the message
 - Pagination callbacks refresh from current task data
+
+### Inline Menu Pagination
+
+The tick (`✅` / `✅T`) and remove (`❌` / `❌T`) inline keyboards are also
+paginated. Telegram rejects keyboards with more than 100 buttons, so when a togo
+or task list is large the buttons are split into pages of up to 90 items.
+
+- A `⬅️ Prev` / `page/total` / `Next ➡️` row appears under the buttons
+- Navigating re-loads the current togos/tasks, so the menu always reflects live data
+- Ticking/removing an item keeps you on the same page
 
 ## Testing
 

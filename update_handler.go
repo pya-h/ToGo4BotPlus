@@ -223,7 +223,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			if togos != nil {
 				if len(togos) >= 1 {
 					response.TextMsg = "Here are your togos for today:"
-					response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, allDays, allDays && terms[i+1] == "-a")
+					response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, allDays, allDays && terms[i+1] == "-a", 0)
 				} else {
 					response.TextMsg = "No togos to tick!"
 				}
@@ -239,7 +239,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			if tasks != nil {
 				if len(tasks) >= 1 {
 					response.TextMsg = "Here are your tasks to tick:"
-					response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, TickTask, includeInactive)
+					response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, TickTask, includeInactive, 0)
 				} else {
 					response.TextMsg = "No tasks to tick!"
 				}
@@ -268,7 +268,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 					if err != nil {
 						response.TextMsg = fmt.Sprintln(response.TextMsg, "- - - - - - - - - - - - - - - - - - - - - - - -\n", err.Error())
 					}
-					response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, allDays && terms[i+1] == "-a")
+					response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, allDays && terms[i+1] == "-a", 0)
 				} else {
 					response.TextMsg = "No togos so far..."
 				}
@@ -279,7 +279,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			if tasks != nil {
 				if len(tasks) >= 1 {
 					response.TextMsg = "Here are your tasks to remove:"
-					response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, RemoveTask, includeInactive)
+					response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, RemoveTask, includeInactive, 0)
 				} else {
 					response.TextMsg = "No tasks so far..."
 				}
@@ -324,6 +324,82 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			}
 		case "/now":
 			response.TextMsg = now.Get()
+		case TogoTickByIdCommand:
+			if i+1 < numOfTerms {
+				var id uint64
+				if _, err := fmt.Sscan(terms[i+1], &id); err != nil {
+					response.TextMsg = "Invalid togo id. Usage: tk  <togo_id>"
+					break
+				}
+				togos, err := Togo.Load(message.Chat.ID, false, false)
+				if togos == nil {
+					if err != nil {
+						response.TextMsg = err.Error()
+					} else {
+						response.TextMsg = "Could not load togos."
+					}
+					break
+				}
+				togo, getErr := togos.Get(id)
+				if getErr != nil {
+					response.TextMsg = getErr.Error()
+					break
+				}
+				if togo.Progress < 100 {
+					togo.Progress = 100
+				} else {
+					togo.Progress = 0
+				}
+				if updateErr := togo.Update(message.Chat.ID); updateErr != nil {
+					response.TextMsg = updateErr.Error()
+					break
+				}
+				if togo.Progress >= 100 {
+					response.TextMsg = fmt.Sprintf("✅ Togo #%d %q ticked.", togo.Id, togo.Title)
+				} else {
+					response.TextMsg = fmt.Sprintf("Togo #%d %q unticked.", togo.Id, togo.Title)
+				}
+			} else {
+				response.TextMsg = "Usage: tk  <togo_id>"
+			}
+		case TaskTickByIdCommand:
+			if i+1 < numOfTerms {
+				var id uint64
+				if _, err := fmt.Sscan(terms[i+1], &id); err != nil {
+					response.TextMsg = "Invalid task id. Usage: TK  <task_id>"
+					break
+				}
+				tasks, warning := Task.Load(message.Chat.ID, true, true)
+				if tasks == nil {
+					if warning != nil {
+						response.TextMsg = warning.Error()
+					} else {
+						response.TextMsg = "Could not load tasks."
+					}
+					break
+				}
+				task, getErr := tasks.Get(id)
+				if getErr != nil {
+					response.TextMsg = getErr.Error()
+					break
+				}
+				if task.Progress < 100 {
+					task.Progress = 100
+				} else {
+					task.Progress = 0
+				}
+				if updateErr := task.Update(message.Chat.ID); updateErr != nil {
+					response.TextMsg = updateErr.Error()
+					break
+				}
+				if task.Progress >= 100 {
+					response.TextMsg = fmt.Sprintf("✅ Task #%d %q ticked.", task.Id, task.Title)
+				} else {
+					response.TextMsg = fmt.Sprintf("Task #%d %q unticked.", task.Id, task.Title)
+				}
+			} else {
+				response.TextMsg = "Usage: TK  <task_id>"
+			}
 		}
 	}
 }
@@ -362,7 +438,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 				togo.Progress = 0
 			}
 			_ = togo.Update(response.TargetChatId)
-			response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, callbackData.AllDays, callbackData.JustUndones)
+			response.InlineKeyboard = InlineKeyboardMenu(togos, TickTogo, callbackData.AllDays, callbackData.JustUndones, callbackData.MenuPage)
 			response.TextMsg = "✅ DONE! Now select the next togo you want to tick ..."
 		} else {
 			updated, err := togos.Remove(response.TargetChatId, uint64(callbackData.ID))
@@ -372,7 +448,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 			}
 			if len(updated) >= 1 {
 				response.TextMsg = "❌ DONE! Now select the next togo you want to REMOVE ..."
-				response.InlineKeyboard = InlineKeyboardMenu(updated, RemoveTogo, callbackData.AllDays, callbackData.JustUndones)
+				response.InlineKeyboard = InlineKeyboardMenu(updated, RemoveTogo, callbackData.AllDays, callbackData.JustUndones, callbackData.MenuPage)
 			} else {
 				response.TextMsg = "❌ DONE! All removed."
 			}
@@ -415,7 +491,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 		if len(updated) >= 1 {
 			response.TextMsg = "✅ Task updated. Pick the next task to tick ..."
-			response.InlineKeyboard = TaskInlineKeyboardMenu(updated, TickTask, callbackData.TaskIncludeInactive)
+			response.InlineKeyboard = TaskInlineKeyboardMenu(updated, TickTask, callbackData.TaskIncludeInactive, callbackData.MenuPage)
 		} else {
 			response.TextMsg = "✅ Task updated. No remaining tasks in this view."
 		}
@@ -441,7 +517,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 		if len(updated) >= 1 {
 			response.TextMsg = "❌ Task removed. Pick the next task to remove ..."
-			response.InlineKeyboard = TaskInlineKeyboardMenu(updated, RemoveTask, callbackData.TaskIncludeInactive)
+			response.InlineKeyboard = TaskInlineKeyboardMenu(updated, RemoveTask, callbackData.TaskIncludeInactive, callbackData.MenuPage)
 		} else {
 			response.TextMsg = "❌ Task removed. All removed in this view."
 		}
@@ -469,6 +545,48 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		response.InlineKeyboard = TaskPageNavigationKeyboard(page, len(pages), callbackData.TaskIncludeInactive, callbackData.TaskReminderMode)
 		if warning != nil {
 			response.TextMsg = fmt.Sprintf("%s\n\nwarning: %s", response.TextMsg, warning.Error())
+		}
+
+	case ShowTogoMenuPage:
+		togos, err := Togo.Load(response.TargetChatId, !callbackData.AllDays, callbackData.JustUndones)
+		if togos == nil {
+			if err != nil {
+				response.TextMsg = err.Error()
+			} else {
+				response.TextMsg = "Could not load togos for this page."
+			}
+			break
+		}
+		if len(togos) == 0 {
+			response.TextMsg = "No togos to show."
+			break
+		}
+		response.InlineKeyboard = InlineKeyboardMenu(togos, callbackData.MenuAction, callbackData.AllDays, callbackData.JustUndones, callbackData.MenuPage)
+		if callbackData.MenuAction == RemoveTogo {
+			response.TextMsg = "Select a togo to remove ..."
+		} else {
+			response.TextMsg = "Select a togo to tick ..."
+		}
+
+	case ShowTaskMenuPage:
+		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		if tasks == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load tasks for this page."
+			}
+			break
+		}
+		if len(tasks) == 0 {
+			response.TextMsg = "No tasks to show."
+			break
+		}
+		response.InlineKeyboard = TaskInlineKeyboardMenu(tasks, callbackData.MenuAction, callbackData.TaskIncludeInactive, callbackData.MenuPage)
+		if callbackData.MenuAction == RemoveTask {
+			response.TextMsg = "Select a task to remove ..."
+		} else {
+			response.TextMsg = "Select a task to tick ..."
 		}
 
 	default:

@@ -66,6 +66,8 @@ const (
 	TickTask
 	RemoveTask
 	ShowTaskPage
+	ShowTogoMenuPage
+	ShowTaskMenuPage
 )
 
 type CallbackData struct {
@@ -77,6 +79,8 @@ type CallbackData struct {
 	TaskPage            int         `json:"TP,omitempty"`
 	TaskIncludeInactive bool        `json:"TI,omitempty"`
 	TaskReminderMode    bool        `json:"TR,omitempty"`
+	MenuPage            int         `json:"MP,omitempty"` // current page of a paginated tick/remove inline menu
+	MenuAction          UserAction  `json:"MX,omitempty"` // the tick/remove action a menu-navigation button should re-render
 }
 
 func (callbackData CallbackData) Json() string {
@@ -114,42 +118,102 @@ func truncateUTF8(s string, maxBytes int) string {
 	return ""
 }
 
-func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, justUndones bool) (inlineKeyboard *tgbotapi.InlineKeyboardMarkup) {
-	var (
-		count     = len(togos)
-		col       = 0
-		row       = 0
-		rowsCount = int(count / MaximumNumberOfRowItems)
-	) // calculate the number of rows needed
+// menuPageCount returns how many pages of inline buttons are needed for count
+// items (always at least 1, so callers can safely index page 0).
+func menuPageCount(count int) int {
+	pages := (count + MaximumInlineMenuItems - 1) / MaximumInlineMenuItems
+	if pages < 1 {
+		return 1
+	}
+	return pages
+}
+
+// buildMenuNavRow builds the ⬅️ Prev / page indicator / Next ➡️ row for a
+// paginated tick/remove menu. It returns nil when there is only a single page.
+// template carries the menu's scope flags (AllDays/JustUndones or
+// TaskIncludeInactive); this function fills in the navigation action, the menu
+// action to re-render, and the target page for each button.
+func buildMenuNavRow(navAction UserAction, menuAction UserAction, page int, totalPages int, template CallbackData) []tgbotapi.InlineKeyboardButton {
+	if totalPages <= 1 {
+		return nil
+	}
+	template.Action = navAction
+	template.MenuAction = menuAction
+
+	row := make([]tgbotapi.InlineKeyboardButton, 0, 3)
+	if page > 0 {
+		prev := template
+		prev.MenuPage = page - 1
+		prevData := prev.Json()
+		row = append(row, tgbotapi.InlineKeyboardButton{Text: "⬅️ Prev", CallbackData: &prevData})
+	}
+
+	indicator := template
+	indicator.MenuPage = page
+	indicatorData := indicator.Json()
+	row = append(row, tgbotapi.InlineKeyboardButton{Text: fmt.Sprintf("%d/%d", page+1, totalPages), CallbackData: &indicatorData})
+
+	if page < totalPages-1 {
+		next := template
+		next.MenuPage = page + 1
+		nextData := next.Json()
+		row = append(row, tgbotapi.InlineKeyboardButton{Text: "Next ➡️", CallbackData: &nextData})
+	}
+	return row
+}
+
+func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, justUndones bool, page int) (inlineKeyboard *tgbotapi.InlineKeyboardMarkup) {
+	total := len(togos)
+	totalPages := menuPageCount(total)
+	if page < 0 {
+		page = 0
+	}
+	if page >= totalPages {
+		page = totalPages - 1
+	}
+
+	start := page * MaximumInlineMenuItems
+	end := start + MaximumInlineMenuItems
+	if end > total {
+		end = total
+	}
+	pageItems := togos[start:end]
+	count := len(pageItems)
+
+	rowsCount := count / MaximumNumberOfRowItems
 	if count%MaximumNumberOfRowItems != 0 {
 		rowsCount++
 	}
-	var menu tgbotapi.InlineKeyboardMarkup
-	menu.InlineKeyboard = make([][]tgbotapi.InlineKeyboardButton, rowsCount)
 
-	for i := range togos {
-		if col == 0 {
-			// calculting the number of column needed in each row
-			if row < rowsCount-1 {
-				menu.InlineKeyboard[row] = make([]tgbotapi.InlineKeyboardButton, MaximumNumberOfRowItems)
-			} else {
-				menu.InlineKeyboard[row] = make([]tgbotapi.InlineKeyboardButton, count-row*MaximumNumberOfRowItems)
+	var menu tgbotapi.InlineKeyboardMarkup
+	menu.InlineKeyboard = make([][]tgbotapi.InlineKeyboardButton, 0, rowsCount+1)
+
+	for r := 0; r < rowsCount; r++ {
+		rowStart := r * MaximumNumberOfRowItems
+		rowEnd := rowStart + MaximumNumberOfRowItems
+		if rowEnd > count {
+			rowEnd = count
+		}
+		buttons := make([]tgbotapi.InlineKeyboardButton, 0, rowEnd-rowStart)
+		for k := rowStart; k < rowEnd; k++ {
+			status := ""
+			if pageItems[k].Progress >= 100 {
+				status = "✅ "
 			}
-			row++
+			var togoTitle string = fmt.Sprint(status, pageItems[k].Title)
+			if len(togoTitle) >= MaximumInlineButtonTextLength {
+				togoTitle = fmt.Sprint(truncateUTF8(togoTitle, MaximumInlineButtonTextLength-3), "...")
+			}
+			data := (CallbackData{Action: action, ID: int64(pageItems[k].Id), AllDays: allDays, JustUndones: justUndones, MenuPage: page}).Json()
+			buttons = append(buttons, tgbotapi.InlineKeyboardButton{Text: togoTitle, CallbackData: &data})
 		}
-		status := ""
-		if togos[i].Progress >= 100 {
-			status = "✅ "
-		}
-		var togoTitle string = fmt.Sprint(status, togos[i].Title)
-		if len(togoTitle) >= MaximumInlineButtonTextLength {
-			togoTitle = fmt.Sprint(truncateUTF8(togoTitle, MaximumInlineButtonTextLength-3), "...")
-		}
-		data := (CallbackData{Action: action, ID: int64(togos[i].Id), AllDays: allDays, JustUndones: justUndones}).Json()
-		menu.InlineKeyboard[row-1][col] = tgbotapi.InlineKeyboardButton{Text: togoTitle,
-			CallbackData: &data}
-		col = (col + 1) % MaximumNumberOfRowItems
+		menu.InlineKeyboard = append(menu.InlineKeyboard, buttons)
 	}
+
+	if navRow := buildMenuNavRow(ShowTogoMenuPage, action, page, totalPages, CallbackData{AllDays: allDays, JustUndones: justUndones}); navRow != nil {
+		menu.InlineKeyboard = append(menu.InlineKeyboard, navRow)
+	}
+
 	inlineKeyboard = &menu
 	return
 }

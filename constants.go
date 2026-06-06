@@ -6,6 +6,10 @@ const (
 	NumberOfSeparatorSpaces       = 2
 	MaximumTaskMessageLength      = 3200
 	TaskReminderWarningPrefix     = "Task reminder warning:"
+	// MaximumInlineMenuItems caps how many togo/task buttons appear on a single
+	// inline keyboard page. Telegram rejects inline keyboards with more than 100
+	// buttons, so we page well under that and reserve a row for navigation.
+	MaximumInlineMenuItems = 90
 )
 
 const (
@@ -18,6 +22,8 @@ const (
 	TaskIncludeInactiveToken = "+i"
 	TaskStatsToken           = "t"
 	TaskBothStatsToken       = "b"
+	TogoTickByIdCommand      = "tk"
+	TaskTickByIdCommand      = "TK"
 )
 
 const HELP_MESSAGE = "WTF?\n```\n" +
@@ -70,6 +76,11 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 
 => $     id     [=  weight]      [+p     progress_till_now]     [:     description]      [+x | -x]     [@  start_date_as_how_many_days_from_now      start_time_as_hh:mm]      [...]
 
+## tk: Quick tick a togo by id (toggle done/undone)
+=> tk     id      [...]
+
+     Toggles the completion of togo #id without opening the inline keyboard.
+
 ## Other Notes:
 *     [...] means that Bot supports chaining commands; You can chain any count of any of these commands and bot will do them in queue.
 *     Each line can contain multiple command, as many as you want. Like:
@@ -114,6 +125,10 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 =>     ❌T
 
 	Remove tasks using inline keyboard.
+
+=>     TK     id
+
+	Quick tick a task by id (toggle done/undone) without the inline keyboard.
 
 =>     ~s
 

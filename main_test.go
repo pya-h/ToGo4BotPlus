@@ -130,7 +130,7 @@ func TestInlineKeyboardMenuTruncatesCorrectly(t *testing.T) {
 	}
 
 	// Call InlineKeyboardMenu
-	menu := InlineKeyboardMenu(togos, TickTogo, false, false)
+	menu := InlineKeyboardMenu(togos, TickTogo, false, false, 0)
 
 	// Verify that the menu was created
 	if menu == nil {
@@ -154,7 +154,7 @@ func TestInlineKeyboardMenuEmojiPrefix(t *testing.T) {
 		{Id: 1, Title: "Complete Task", Progress: 100}, // Completed, should get ✅ prefix
 	}
 
-	menu := InlineKeyboardMenu(togos, TickTogo, false, false)
+	menu := InlineKeyboardMenu(togos, TickTogo, false, false, 0)
 
 	if menu == nil {
 		t.Fatal("InlineKeyboardMenu returned nil")
@@ -183,7 +183,7 @@ func TestInlineKeyboardMenuLongTitle(t *testing.T) {
 		{Id: 1, Title: longTitle, Progress: 0},
 	}
 
-	menu := InlineKeyboardMenu(togos, TickTogo, false, false)
+	menu := InlineKeyboardMenu(togos, TickTogo, false, false, 0)
 
 	if menu == nil {
 		t.Fatal("InlineKeyboardMenu returned nil")
@@ -207,7 +207,7 @@ func TestInlineKeyboardMenuAllEmoji(t *testing.T) {
 		{Id: 1, Title: "🎯🚀📝🎨🔥", Progress: 0},
 	}
 
-	menu := InlineKeyboardMenu(togos, TickTogo, false, false)
+	menu := InlineKeyboardMenu(togos, TickTogo, false, false, 0)
 
 	if menu == nil {
 		t.Fatal("InlineKeyboardMenu returned nil")
@@ -226,7 +226,7 @@ func TestInlineKeyboardMenuMultibyteCharacters(t *testing.T) {
 		{Id: 1, Title: "Cafe mañana", Progress: 0},
 	}
 
-	menu := InlineKeyboardMenu(togos, TickTogo, false, false)
+	menu := InlineKeyboardMenu(togos, TickTogo, false, false, 0)
 
 	if menu == nil {
 		t.Fatal("InlineKeyboardMenu returned nil")

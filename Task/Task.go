@@ -117,7 +117,7 @@ func (task *Task) Save() (uint64, error) {
 
 func isCommand(term string) bool {
 	switch term {
-	case "+", "%", "#", "#️⃣", "$", "✅", "❌", "/db", "/now", "^", "~", "~s", "&", "✅T", "✅t", "❌T", "❌t":
+	case "+", "%", "#", "#️⃣", "$", "✅", "❌", "/db", "/now", "^", "~", "~s", "&", "✅T", "✅t", "❌T", "❌t", "tk", "TK":
 		return true
 	default:
 		return false
