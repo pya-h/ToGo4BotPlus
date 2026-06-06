@@ -51,6 +51,16 @@ func validatePositiveInt(value string) error {
 	return nil
 }
 
+// validateNonNegativeInt allows 0 (e.g. the togo "day" step where 0 = today),
+// unlike validatePositiveInt which rejects it.
+func validateNonNegativeInt(value string) error {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n < 0 {
+		return errors.New("enter 0 or a positive whole number")
+	}
+	return nil
+}
+
 func validatePercent(value string) error {
 	n, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || n < 0 || n > 100 {
@@ -176,7 +186,7 @@ func newAddTogoFlow() *Flow {
 					FlowOption{Label: "Tomorrow", Value: "1"},
 					FlowOption{Label: "+2 days", Value: "2"},
 					FlowOption{Label: "+7 days", Value: "7"},
-				), Validate: validatePositiveInt},
+				), Validate: validateNonNegativeInt},
 			{Key: "time", Prompt: "At what time (HH:MM)?", Kind: StepText, Optional: true, Validate: validateHHMM},
 			{Key: "duration", Prompt: "Duration in minutes?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: numberOptions(15, 30, 60, 90), Validate: validatePositiveInt},

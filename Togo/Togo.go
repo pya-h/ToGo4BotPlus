@@ -357,6 +357,7 @@ func Load(ownerId int64, justToday bool, justUndones bool) (togos TogoList, err 
 			err = e
 			return
 		}
+		defer rows.Close()
 
 		now := Today()
 		for rows.Next() {
@@ -405,6 +406,7 @@ func LoadEverybodysToday() (TogoList, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer rows.Close()
 
 		for rows.Next() {
 			var togo Togo

@@ -44,6 +44,13 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 	}
 
 	if update.CallbackQuery != nil {
+		// Telegram delivers callbacks with a nil Message when the originating
+		// message is too old (~48h) or is an inline_message_id result. Both
+		// callback handlers edit that message, so bail out early to avoid a
+		// nil dereference (otherwise only caught by the panic recovery above).
+		if update.CallbackQuery.Message == nil {
+			return
+		}
 		if cb := LoadCallbackData(update.CallbackQuery.Data); isFlowAction(cb.Action) {
 			telegramBot.handleFlowCallback(update.CallbackQuery, cb)
 			return

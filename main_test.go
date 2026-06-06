@@ -26,6 +26,10 @@ type capturedRequest struct {
 
 type recordingTransport struct {
 	requests []capturedRequest
+	// failParseModeOnce, when set, makes the next Markdown sendMessage return an
+	// API error (as Telegram does for unbalanced entities) and then clears
+	// itself, so tests can exercise the plain-text retry in SendTextMessage.
+	failParseModeOnce bool
 }
 
 func (rt *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -44,6 +48,17 @@ func (rt *recordingTransport) RoundTrip(req *http.Request) (*http.Response, erro
 
 	endpoint := path.Base(req.URL.Path)
 	rt.requests = append(rt.requests, capturedRequest{Endpoint: endpoint, Values: values})
+
+	if endpoint == "sendMessage" && rt.failParseModeOnce && values.Get("parse_mode") != "" {
+		rt.failParseModeOnce = false
+		responseBody := `{"ok":false,"error_code":400,"description":"Bad Request: can't parse entities"}`
+		return &http.Response{
+			StatusCode: 400,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+			Request:    req,
+		}, nil
+	}
 
 	responseBody := `{"ok":true,"result":{}}`
 	switch endpoint {

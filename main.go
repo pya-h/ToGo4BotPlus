@@ -41,8 +41,20 @@ func (telegramBotAPI *TelegramBotAPI) SendTextMessage(response TelegramResponse)
 		msg.ReplyMarkup = response.ReplyMarkup
 	}
 	msg.ParseMode = tgbotapi.ModeMarkdown
-	telegramBotAPI.Send(msg)
-
+	if _, err := telegramBotAPI.Send(msg); err != nil {
+		// Freeform user content (togo titles, idea text, ...) can contain
+		// unbalanced Markdown (* _ ` [ ) which makes Telegram reject the whole
+		// message with a 400. Rather than silently dropping it, retry once as
+		// plain text so the content still reaches the user.
+		plain := tgbotapi.NewMessage(response.TargetChatId, response.TextMsg)
+		plain.ReplyToMessageID = response.MessageRepliedTo
+		if response.InlineKeyboard != nil {
+			plain.ReplyMarkup = response.InlineKeyboard
+		} else if response.ReplyMarkup != nil {
+			plain.ReplyMarkup = response.ReplyMarkup
+		}
+		telegramBotAPI.Send(plain)
+	}
 }
 
 // SendTextMessageReturningID sends a message and returns the resulting Telegram
