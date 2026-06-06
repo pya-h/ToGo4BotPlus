@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -108,6 +109,9 @@ func withTempWorkingDir(t *testing.T, initDB bool) {
 	if initDB {
 		if err := Togo.InitDatabase(); err != nil {
 			t.Fatalf("failed to initialize isolated db: %v", err)
+		}
+		if err := Task.InitDatabase(); err != nil {
+			t.Fatalf("failed to initialize isolated task db: %v", err)
 		}
 	}
 }
@@ -645,5 +649,95 @@ func TestProcessNotificationTickLoadFailureNotifiesAdminOnce(t *testing.T) {
 	afterSecond := transport.countEndpoint("sendMessage")
 	if afterSecond != afterFirst {
 		t.Fatalf("expected no repeated admin notification while failure persists, count changed %d -> %d", afterFirst, afterSecond)
+	}
+}
+
+func TestBuildTaskPagesAndNavigation(t *testing.T) {
+	now := time.Now()
+	future := now.AddDate(0, 0, 1)
+	tasks := Task.TaskList{
+		{Id: 1, Title: "Active A", Weight: 1, Progress: 20},
+		{Id: 2, Title: "Active B", Weight: 2, Progress: 0, Description: strings.Repeat("desc ", 20)},
+		{Id: 3, Title: "Inactive", Weight: 1, Progress: 10, StartDate: &future},
+	}
+
+	pages := BuildTaskPages(tasks, true, false, 220)
+	if len(pages) < 2 {
+		t.Fatalf("expected multiple pages with constrained max size, got %d", len(pages))
+	}
+
+	firstNav := TaskPageNavigationKeyboard(0, len(pages), true, false)
+	if firstNav == nil {
+		t.Fatal("expected navigation keyboard for first page")
+	}
+	encodedFirst := firstNav.InlineKeyboard[0][0].CallbackData
+	if encodedFirst == nil || !strings.Contains(*encodedFirst, `"TP":1`) {
+		t.Fatalf("expected next-page callback for first page, got: %v", encodedFirst)
+	}
+
+	midNav := TaskPageNavigationKeyboard(1, len(pages), true, false)
+	if midNav == nil || len(midNav.InlineKeyboard[0]) < 2 {
+		t.Fatalf("expected prev/next buttons on middle page, got: %+v", midNav)
+	}
+}
+
+func TestTaskReminderSlotBoundaries(t *testing.T) {
+	dueTime := time.Date(2026, time.June, 6, 6, 0, 0, 0, time.Local)
+	slot, due := taskReminderSlot(dueTime, 4)
+	if !due {
+		t.Fatal("expected 06:00 to be due for 4 reminders/day")
+	}
+	if slot != "2026-06-06-06" {
+		t.Fatalf("unexpected slot format: %s", slot)
+	}
+
+	notDue := time.Date(2026, time.June, 6, 7, 0, 0, 0, time.Local)
+	if _, ok := taskReminderSlot(notDue, 4); ok {
+		t.Fatal("expected 07:00 not to be due for 4 reminders/day")
+	}
+
+	if _, ok := taskReminderSlot(dueTime, 0); ok {
+		t.Fatal("expected disabled reminders (0/day) to never be due")
+	}
+}
+
+func TestProcessTaskReminderTickSendsAndDeduplicatesSlot(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	oldEnv := env
+	defer func() {
+		env = oldEnv
+	}()
+	env = map[string]string{"ADMIN_ID": "555"}
+
+	ownerID := int64(600)
+	seed := &Task.Task{OwnerId: ownerID, Title: "Reminder task", Weight: 1, Progress: 20}
+	if _, err := seed.Save(); err != nil {
+		t.Fatalf("failed to save reminder task: %v", err)
+	}
+	if err := Task.SetReminderTimes(ownerID, 24); err != nil {
+		t.Fatalf("failed to set reminders/day to 24: %v", err)
+	}
+
+	now := Togo.Date{Time: time.Date(2026, time.June, 6, 6, 0, 0, 0, time.Local)}
+	before := transport.countEndpoint("sendMessage")
+	bot.processTaskReminderTick(now)
+	afterFirst := transport.countEndpoint("sendMessage")
+	if afterFirst-before != 1 {
+		t.Fatalf("expected one reminder send on first due slot, got delta=%d", afterFirst-before)
+	}
+
+	setting, err := Task.GetReminderSetting(ownerID)
+	if err != nil {
+		t.Fatalf("failed loading reminder setting after first tick: %v", err)
+	}
+	if setting.LastReminderSlot != "2026-06-06-06" {
+		t.Fatalf("expected last reminder slot updated, got %q", setting.LastReminderSlot)
+	}
+
+	bot.processTaskReminderTick(now)
+	afterSecond := transport.countEndpoint("sendMessage")
+	if afterSecond != afterFirst {
+		t.Fatalf("expected no duplicate reminder in same slot, count changed %d -> %d", afterFirst, afterSecond)
 	}
 }

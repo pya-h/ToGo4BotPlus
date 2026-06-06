@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
 )
 
@@ -252,5 +253,50 @@ func TestExtractAcceptsValidInput(t *testing.T) {
 		if togo.Title == "" {
 			t.Errorf("Extract produced empty title for %s", tc.desc)
 		}
+	}
+}
+
+func TestTaskAddSyntaxAcceptsValidInput(t *testing.T) {
+	input := "^  Read docs  =  3  +p  40  :  API notes"
+	terms := SplitArguments(input)
+	if len(terms) < 2 || terms[0] != "^" {
+		t.Fatalf("unexpected parsed task-add terms: %#v", terms)
+	}
+
+	task, err := Task.Extract(321, terms[1:])
+	if err != nil {
+		t.Fatalf("Task.Extract should accept valid task input, got error: %v", err)
+	}
+	if task.Title != "Read docs" {
+		t.Fatalf("expected task title 'Read docs', got %q", task.Title)
+	}
+	if task.Weight != 3 {
+		t.Fatalf("expected task weight 3, got %d", task.Weight)
+	}
+	if task.Progress != 40 {
+		t.Fatalf("expected task progress 40, got %d", task.Progress)
+	}
+}
+
+func TestTaskExtractStopsAtNextCommandToken(t *testing.T) {
+	input := "^  Build feature  =  2  #"
+	terms := SplitArguments(input)
+	if len(terms) != 5 || terms[0] != "^" {
+		t.Fatalf("unexpected parsed chained terms: %#v", terms)
+	}
+
+	task, err := Task.Extract(321, terms[1:])
+	if err != nil {
+		t.Fatalf("Task.Extract should parse before next command token, got error: %v", err)
+	}
+	if task.Title != "Build feature" || task.Weight != 2 {
+		t.Fatalf("unexpected task parsed from chained command: %+v", task)
+	}
+}
+
+func TestTaskExtractRejectsTrailingStartDateFlag(t *testing.T) {
+	_, err := Task.Extract(321, []string{"Task", "@"})
+	if err == nil {
+		t.Fatal("expected Task.Extract to reject trailing start-date flag")
 	}
 }

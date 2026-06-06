@@ -237,6 +237,89 @@ Shows today's togos, updates task 1, shows all togos.
 - ❌ Wrong: `# +a` (only 1 space, won't parse correctly)
 - ❌ Wrong: `#   +a` (3 spaces, won't parse correctly)
 
+## Tasks (New Concept)
+
+Tasks are separate from togos.
+
+- No task deadline/time window/duration
+- Optional start date (inactive until start date)
+- Separate listing, progress stats, and reminder flow
+
+### Task Commands
+
+Add task (supports chaining in one message):
+
+```bash
+^  title  [=  weight]  [+p  progress]  [:  description]  [+x | -x]  [@  days_or_yyyy-mm-dd]
+```
+
+List active tasks:
+
+```bash
+~
+```
+
+List active + inactive tasks:
+
+```bash
+~  +i
+```
+
+Get/update task by id:
+
+```bash
+&  id  [=  weight]  [+p  progress]  [:  description]  [+x | -x]  [@  days_or_yyyy-mm-dd]
+```
+
+Tick tasks with inline keyboard:
+
+```bash
+✅T
+```
+
+Remove tasks with inline keyboard:
+
+```bash
+❌T
+```
+
+Task-only progress:
+
+```bash
+%  t
+```
+
+Both togo + task progress in one report:
+
+```bash
+%  b
+```
+
+### Task Reminders
+
+- Default: 4 times/day (every 6 hours)
+- Supported values: `0, 1, 2, 4, 6, 8, 12, 24`
+- `0` disables automatic task reminders
+
+Set reminders/day:
+
+```bash
+~s  4
+```
+
+Show current reminder setting:
+
+```bash
+~s
+```
+
+### Task Pagination
+
+Task list and reminder messages are automatically paginated when too long.
+
+- Use inline `Next` / `Prev` buttons under the message
+- Pagination callbacks refresh from current task data
+
 ## Testing
 
 ### Run All Tests
