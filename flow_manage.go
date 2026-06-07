@@ -461,7 +461,7 @@ func (ideaManager) CanToggle() bool            { return false }
 func (ideaManager) Toggle(int64, uint64) error { return nil }
 
 func (ideaManager) ListItems(chatID int64) ([]manageItem, error) {
-	ideas, err := Idea.Load(chatID, false, "")
+	ideas, err := Idea.Load(chatID, false, false, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +477,7 @@ func (ideaManager) ListItems(chatID int64) ([]manageItem, error) {
 }
 
 func (ideaManager) Card(chatID int64, id uint64) (string, bool) {
-	ideas, err := Idea.Load(chatID, false, "")
+	ideas, err := Idea.Load(chatID, false, false, 0)
 	if err != nil {
 		return "", false
 	}
@@ -489,7 +489,7 @@ func (ideaManager) Card(chatID int64, id uint64) (string, bool) {
 }
 
 func (ideaManager) Delete(chatID int64, id uint64) error {
-	ideas, err := Idea.Load(chatID, false, "")
+	ideas, err := Idea.Load(chatID, false, false, 0)
 	if err != nil {
 		return err
 	}
@@ -506,7 +506,7 @@ func (ideaManager) EditFields() []editField {
 }
 
 func (ideaManager) ApplyEdit(chatID int64, id uint64, field, value string) error {
-	ideas, err := Idea.Load(chatID, false, "")
+	ideas, err := Idea.Load(chatID, false, false, 0)
 	if err != nil {
 		return err
 	}

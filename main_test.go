@@ -104,7 +104,7 @@ func newRecordingBot(t *testing.T) (*TelegramBotAPI, *recordingTransport) {
 	if err != nil {
 		t.Fatalf("failed to create BotAPI with test transport: %v", err)
 	}
-	return &TelegramBotAPI{BotAPI: botAPI, flows: NewFlowStore()}, transport
+	return &TelegramBotAPI{BotAPI: botAPI, flows: NewFlowStore(), ideaReminders: NewReminderStore()}, transport
 }
 
 func withTempWorkingDir(t *testing.T, initDB bool) {

@@ -86,7 +86,7 @@ func TestAddIdeaFlowEndToEndWithSkippedCategory(t *testing.T) {
 	if _, active := bot.flows.Get(chatID); active {
 		t.Fatal("expected flow state cleared after commit")
 	}
-	ideas, _ := Idea.Load(chatID, false, "")
+	ideas, _ := Idea.Load(chatID, false, false, 0)
 	if len(ideas) != 1 {
 		t.Fatalf("expected 1 saved idea, got %d", len(ideas))
 	}
@@ -120,7 +120,7 @@ func TestAddIdeaFlowWithCustomCategory(t *testing.T) {
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 915,
 		(CallbackData{Action: FlowConfirm}).Json())
 
-	ideas, _ := Idea.Load(chatID, false, "")
+	ideas, _ := Idea.Load(chatID, false, false, 0)
 	if len(ideas) != 1 || ideas[0].Category != "Creative" || ideas[0].IsHighPriority {
 		t.Fatalf("custom-category idea mismatch: %+v", ideas)
 	}
@@ -332,7 +332,7 @@ func TestManageIdeaFlowEditAndDelete(t *testing.T) {
 		t.Fatalf("expected updated card with High priority, got %q", updated)
 	}
 
-	reloaded, _ := Idea.Load(chatID, false, "")
+	reloaded, _ := Idea.Load(chatID, false, false, 0)
 	got, _ := reloaded.Get(id)
 	if !got.IsHighPriority {
 		t.Fatalf("expected idea to be high priority after edit: %+v", *got)
@@ -348,7 +348,7 @@ func TestManageIdeaFlowEditAndDelete(t *testing.T) {
 	if !strings.Contains(deleted, "Deleted") {
 		t.Fatalf("expected delete result, got %q", deleted)
 	}
-	after, _ := Idea.Load(chatID, false, "")
+	after, _ := Idea.Load(chatID, false, false, 0)
 	if len(after) != 0 {
 		t.Fatalf("expected 0 ideas after delete, got %d", len(after))
 	}

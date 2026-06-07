@@ -67,6 +67,14 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 	terms := SplitArguments(message.Text)
 	numOfTerms := len(terms)
 
+	// Normalize a leading slash command of the form "/cmd@BotName" to "/cmd"
+	// (Telegram appends the bot username to commands sent in groups).
+	if numOfTerms > 0 && strings.HasPrefix(terms[0], "/") {
+		if at := strings.IndexByte(terms[0], '@'); at >= 0 {
+			terms[0] = terms[0][:at]
+		}
+	}
+
 	now := Togo.Today()
 	for i := 0; i < numOfTerms; i++ {
 		switch terms[i] {
@@ -350,6 +358,15 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			}
 		case "/now":
 			response.TextMsg = now.Get()
+		case "/ideabook", "/favorites":
+			scope := ideaScopeAll
+			if terms[i] == "/favorites" {
+				scope = ideaScopeFav
+			}
+			ideas, warning := loadIdeasForScope(message.Chat.ID, scope, 0)
+			text, kb := renderIdeaList(ideas, scope, 0, 0)
+			response.TextMsg = appendWarning(text, warning)
+			response.InlineKeyboard = kb
 		case TogoTickByIdCommand:
 			if i+1 < numOfTerms {
 				var id uint64
@@ -453,7 +470,20 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 					}
 				}
 			}
-			ideas, warning := Idea.Load(message.Chat.ID, onlyHigh, category)
+			categoryID := int64(0)
+			if category != "" {
+				resolved, lookupErr := Idea.LookupCategoryID(message.Chat.ID, category)
+				if lookupErr != nil {
+					response.TextMsg = lookupErr.Error()
+					break
+				}
+				if resolved == 0 {
+					response.TextMsg = fmt.Sprintf("💡 No ideas found in category %q.", category)
+					break
+				}
+				categoryID = resolved
+			}
+			ideas, warning := Idea.Load(message.Chat.ID, onlyHigh, false, categoryID)
 			if ideas == nil {
 				if warning != nil {
 					response.TextMsg = warning.Error()
@@ -468,7 +498,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			}
 		case IdeaUpdateCommand:
 			if i+1 < numOfTerms {
-				ideas, err := Idea.Load(message.Chat.ID, false, "")
+				ideas, err := Idea.Load(message.Chat.ID, false, false, 0)
 				if ideas != nil {
 					if resp, updateErr := ideas.Update(message.Chat.ID, terms[i+1:]); updateErr == nil {
 						response.TextMsg = resp
@@ -484,7 +514,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 				response.TextMsg = "You must provide the idea identifier!"
 			}
 		case IdeaRemoveCommand:
-			ideas, warning := Idea.Load(message.Chat.ID, false, "")
+			ideas, warning := Idea.Load(message.Chat.ID, false, false, 0)
 			if ideas != nil {
 				if len(ideas) >= 1 {
 					response.TextMsg = "Here are your ideas to remove:"
@@ -690,7 +720,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 
 	case RemoveIdea:
-		ideas, warning := Idea.Load(response.TargetChatId, false, "")
+		ideas, warning := Idea.Load(response.TargetChatId, false, false, 0)
 		if ideas == nil {
 			if warning != nil {
 				response.TextMsg = warning.Error()
@@ -712,7 +742,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 
 	case ShowIdeaMenuPage:
-		ideas, warning := Idea.Load(response.TargetChatId, false, "")
+		ideas, warning := Idea.Load(response.TargetChatId, false, false, 0)
 		if ideas == nil {
 			if warning != nil {
 				response.TextMsg = warning.Error()
@@ -727,6 +757,9 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 		response.InlineKeyboard = IdeaInlineKeyboardMenu(ideas, callbackData.MenuAction, callbackData.MenuPage)
 		response.TextMsg = "Select an idea to remove ..."
+
+	case IdeaMenuList, IdeaMenuOpen, IdeaMenuFav, IdeaMenuRemove, IdeaMenuEdit:
+		telegramBot.handleIdeaMenuCallback(callbackData, response)
 
 	default:
 		response.TextMsg = "Unsupported callback action."

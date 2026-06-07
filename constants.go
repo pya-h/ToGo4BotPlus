@@ -189,4 +189,11 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 ## Guided menus (step by step):
 *   /addidea, /addtogo, /addtask open a guided wizard with inline buttons.
 *   /ideas, /togos, /tasks open a manage menu to edit or delete items.
-*   /cancel aborts the current guided menu.` + "\n```"
+*   /cancel aborts the current guided menu.
+
+## Idea browser & favorites:
+*   /ideabook opens an interactive, paginated idea browser. Tap an idea to view
+    it, then Remove / Heart (favorite) / Edit, or step Prev/Next through the list.
+*   /favorites opens the same browser limited to your hearted ideas.
+*   Heart an idea to make it a favorite; the bot periodically reminds you of a
+    few random favorites so good ideas do not get forgotten.` + "\n```"

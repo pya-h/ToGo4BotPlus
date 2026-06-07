@@ -647,7 +647,7 @@ func TestHandleUpdateIdeaUpdateAndRemoveMenu(t *testing.T) {
 		t.Fatalf("expected updated idea text + high priority, got %q", updText)
 	}
 
-	reloaded, _ := Idea.Load(chatID, false, "")
+	reloaded, _ := Idea.Load(chatID, false, false, 0)
 	got, err := reloaded.Get(id)
 	if err != nil {
 		t.Fatalf("failed to reload idea: %v", err)
@@ -686,7 +686,7 @@ func TestHandleUpdateRemoveIdeaCallback(t *testing.T) {
 		t.Fatalf("expected idea-removed confirmation, got %q", text)
 	}
 
-	remaining, _ := Idea.Load(chatID, false, "")
+	remaining, _ := Idea.Load(chatID, false, false, 0)
 	if len(remaining) != 1 {
 		t.Fatalf("expected 1 idea remaining after removal, got %d", len(remaining))
 	}

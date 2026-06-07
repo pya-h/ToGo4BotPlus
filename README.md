@@ -414,21 +414,46 @@ Remove ideas with an inline keyboard (paginated like the togo/task menus):
 
 ### Category suggestions
 
-Every category you use is remembered per-user. In the `/addIdea` wizard (and idea
-editing), your previously used categories appear as inline suggestion buttons,
-ordered by how often you've used them, alongside a `✏️ Custom` option to type a
-new one. A dedicated `idea_categories` table backs these suggestions.
+Every category you use is remembered per-user in a dedicated `idea_categories`
+table, and ideas reference it by id (`ideas.category_id`). In the `/addIdea`
+wizard (and idea editing) your previously used categories appear as inline
+suggestion buttons, ordered by how often you've used them, alongside a
+`✏️ Custom` option to type a new one.
+
+### Interactive idea browser (`/ideabook`, `/favorites`)
+
+`/ideabook` opens a self-updating, paginated browser:
+
+- The message lists `#id [🔴/⚪] Category: header` for each idea on the page, with
+  an inline button (`#id: header`) per idea. When you have more than 10 ideas a
+  `⬅️ Prev / page / Next ➡️` row appears.
+- Tapping an idea shows its full detail in the same message, with
+  **🗑 Remove / ❤️ Heart / ✏️ Edit** and a **⬅️ Prev / 🔙 Menu / Next ➡️** row to
+  step through ideas or return to the list. Edit hands the message off to the
+  manage-flow edit screens.
+
+`/favorites` is the same browser scoped to ideas you've hearted.
+
+### Favorite-idea reminders
+
+Heart an idea (❤️) to favorite it. An hourly background process tracks, per user
+(in memory), when their next nudge is due; when it arrives the bot sends up to 3
+random favorites using the same browser interface, then schedules the next
+reminder a random 1–30 days out. Only users with at least one favorite are
+processed.
 
 ## Command Token Reference (Ideas)
 
 | Command | Token | Meaning |
 |---------|-------|---------|
 | `*` | (text) | Add a new idea |
-| `;` | (default) | List all ideas |
+| `;` | (default) | List all ideas (text report) |
 | `;` | `!` | List high-priority ideas |
 | `;` | `c  <category>` | List ideas by category |
 | `;u` | `id` | Get/update an idea by id |
 | `*x` | (default) | Remove ideas via inline keyboard |
+| `/ideabook` | — | Interactive idea browser (paginated, heart/edit/remove) |
+| `/favorites` | — | Interactive browser of favorite ideas |
 
 ## Testing
 

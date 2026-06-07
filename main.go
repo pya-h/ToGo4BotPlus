@@ -29,7 +29,8 @@ type TelegramResponse struct {
 
 type TelegramBotAPI struct {
 	*tgbotapi.BotAPI
-	flows *FlowStore // in-memory guided-flow (Type B) conversation state
+	flows         *FlowStore     // in-memory guided-flow (Type B) conversation state
+	ideaReminders *ReminderStore // in-memory favorite-idea reminder schedule (per owner)
 }
 
 func (telegramBotAPI *TelegramBotAPI) SendTextMessage(response TelegramResponse) {
@@ -83,7 +84,7 @@ func (telegramBotAPI *TelegramBotAPI) EditTextMessage(response TelegramResponse)
 
 func NewTelegramBotAPI(token string) (*TelegramBotAPI, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
-	return &TelegramBotAPI{BotAPI: bot, flows: NewFlowStore()}, err
+	return &TelegramBotAPI{BotAPI: bot, flows: NewFlowStore(), ideaReminders: NewReminderStore()}, err
 }
 
 // registerBotCommands publishes the guided-flow slash commands to Telegram's
@@ -101,6 +102,8 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		{"ideas", "Manage your ideas"},
 		{"togos", "Manage your togos"},
 		{"tasks", "Manage your tasks"},
+		{"ideabook", "Browse your ideas (interactive)"},
+		{"favorites", "Browse your favorite ideas"},
 		{"cancel", "Cancel the current guided menu"},
 		{"now", "Show current date/time"},
 	}
@@ -140,6 +143,11 @@ const (
 	FlowEdit
 	FlowDelete
 	FlowToggle
+	IdeaMenuList   // render a page of the interactive idea browser
+	IdeaMenuOpen   // open one idea's detail card in the browser
+	IdeaMenuFav    // toggle an idea's favorite flag from the browser
+	IdeaMenuRemove // delete an idea from the browser, return to the list
+	IdeaMenuEdit   // hand the browser message off to the manage-flow edit screens
 )
 
 type CallbackData struct {
@@ -154,6 +162,8 @@ type CallbackData struct {
 	MenuPage            int         `json:"MP,omitempty"` // current page of a paginated tick/remove inline menu
 	MenuAction          UserAction  `json:"MX,omitempty"` // the tick/remove action a menu-navigation button should re-render
 	FlowOpt             int         `json:"FO,omitempty"` // selected option index within an active guided flow step
+	IdeaScope           int         `json:"IK,omitempty"` // idea-browser scope (all / high / favorites / category)
+	IdeaCat             int64       `json:"IC,omitempty"` // category id when the idea-browser scope is "category"
 }
 
 func (callbackData CallbackData) Json() string {
@@ -461,6 +471,7 @@ func main() {
 	}
 
 	go bot.NotifyRightNowTogos() // run the scheduler that will check which togos are hapening right now, for each user
+	go bot.RemindFavoriteIdeas() // hourly: nudge users about a random batch of their favorite ideas
 	log.Println("configured.")
 	for update := range updates {
 		bot.HandleUpdate(update)
