@@ -234,6 +234,63 @@ func TestUpdateIdeaViaTerms(t *testing.T) {
 	}
 }
 
+func TestIdeaHeader(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"single line", "single line"},
+		{"  hi there  ", "hi there"},
+		{"first line\nsecond line", "first line"},
+		{"l1\nl2\nl3", "l1"},
+		{"", "(empty)"},
+		{"   ", "(empty)"},
+	}
+	for _, c := range cases {
+		if got := (Idea{Text: c.in}).Header(); got != c.want {
+			t.Fatalf("Header(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestIdeaListToString(t *testing.T) {
+	ideas := IdeaList{{Id: 1, Text: "alpha"}, {Id: 2, Text: "beta", IsHighPriority: true}}
+	lines := ideas.ToString()
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 rendered lines, got %d", len(lines))
+	}
+	if !strings.Contains(lines[0], "alpha") || !strings.Contains(lines[1], "beta") {
+		t.Fatalf("rendered lines mismatch: %v", lines)
+	}
+}
+
+func TestIdeaListIndex(t *testing.T) {
+	ideas := IdeaList{{Id: 5}, {Id: 9}, {Id: 2}}
+	if got := ideas.Index(9); got != 1 {
+		t.Fatalf("Index(9) = %d, want 1", got)
+	}
+	if got := ideas.Index(2); got != 2 {
+		t.Fatalf("Index(2) = %d, want 2", got)
+	}
+	if got := ideas.Index(404); got != -1 {
+		t.Fatalf("Index(404) = %d, want -1", got)
+	}
+}
+
+func TestRegisterCategoryPublicWrapper(t *testing.T) {
+	withIsolatedIdeaDatabase(t)
+	owner := int64(41)
+
+	id1, err := RegisterCategory(owner, "Tech")
+	if err != nil || id1 == 0 {
+		t.Fatalf("expected a category id, got id=%d err=%v", id1, err)
+	}
+	id2, err := RegisterCategory(owner, "Tech")
+	if err != nil || id2 != id1 {
+		t.Fatalf("expected the same id on re-register, got id1=%d id2=%d err=%v", id1, id2, err)
+	}
+	if blank, err := RegisterCategory(owner, "   "); err != nil || blank != 0 {
+		t.Fatalf("expected blank category to yield id 0, got %d err=%v", blank, err)
+	}
+}
+
 func TestToggleFavoriteAndFavoritesFilter(t *testing.T) {
 	withIsolatedIdeaDatabase(t)
 	owner := int64(11)

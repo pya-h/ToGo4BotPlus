@@ -219,48 +219,63 @@ func (telegramBot *TelegramBotAPI) handleIdeaMenuCallback(cb CallbackData, respo
 		ideas, warning := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
 		text, kb := renderIdeaList(ideas, cb.IdeaScope, cb.IdeaCat, cb.MenuPage)
 		response.TextMsg = appendWarning(text, warning)
-		response.InlineKeyboard = kb
+		response.InlineKeyboard = orEmptyKeyboard(kb)
 
 	case IdeaMenuOpen:
 		ideas, warning := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
-		if text, kb, ok := renderIdeaDetail(ideas, cb.IdeaScope, cb.IdeaCat, uint64(cb.ID)); ok {
-			response.TextMsg = appendWarning(text, warning)
-			response.InlineKeyboard = kb
-		} else {
-			text, kb := renderIdeaList(ideas, cb.IdeaScope, cb.IdeaCat, 0)
-			response.TextMsg = appendWarning(text, warning)
-			response.InlineKeyboard = kb
-		}
+		response.TextMsg, response.InlineKeyboard = detailOrList(ideas, cb, uint64(cb.ID), cb.MenuPage, warning)
 
 	case IdeaMenuFav:
 		if _, err := Idea.ToggleFavorite(owner, uint64(cb.ID)); err != nil {
 			response.TextMsg = err.Error()
 			return
 		}
-		ideas, _ := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
-		if text, kb, ok := renderIdeaDetail(ideas, cb.IdeaScope, cb.IdeaCat, uint64(cb.ID)); ok {
-			response.TextMsg = text
-			response.InlineKeyboard = kb
-		} else {
-			// e.g. un-favorited while browsing the favorites scope: drop to the list.
-			text, kb := renderIdeaList(ideas, cb.IdeaScope, cb.IdeaCat, cb.MenuPage)
-			response.TextMsg = text
-			response.InlineKeyboard = kb
-		}
+		// Falls back to the list when un-favoriting removes the idea from the
+		// favorites scope; always returns a non-nil keyboard so stale buttons clear.
+		ideas, warning := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
+		response.TextMsg, response.InlineKeyboard = detailOrList(ideas, cb, uint64(cb.ID), cb.MenuPage, warning)
 
 	case IdeaMenuRemove:
-		ideas, _ := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
-		if updated, err := ideas.Remove(owner, uint64(cb.ID)); err == nil {
-			text, kb := renderIdeaList(updated, cb.IdeaScope, cb.IdeaCat, cb.MenuPage)
-			response.TextMsg = "🗑 Removed.\n\n" + text
-			response.InlineKeyboard = kb
-		} else {
-			response.TextMsg = err.Error()
+		before, _ := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
+		updated, err := before.Remove(owner, uint64(cb.ID))
+		if err != nil {
+			// The DB delete runs before the in-memory lookup, so the row may be
+			// gone even when the id isn't in this scope's filtered list. Reload
+			// and only surface the error if nothing actually changed.
+			after, _ := loadIdeasForScope(owner, cb.IdeaScope, cb.IdeaCat)
+			if len(after) == len(before) {
+				response.TextMsg = err.Error()
+				return
+			}
+			updated = after
 		}
+		text, kb := renderIdeaList(updated, cb.IdeaScope, cb.IdeaCat, cb.MenuPage)
+		response.TextMsg = "🗑 Removed.\n\n" + text
+		response.InlineKeyboard = orEmptyKeyboard(kb)
 
 	case IdeaMenuEdit:
 		telegramBot.enterIdeaEditFromMenu(owner, cb, response)
 	}
+}
+
+// detailOrList renders the idea's detail view, or falls back to the list when the
+// idea is no longer in the current scope (e.g. just un-favorited). It always
+// returns a non-nil keyboard so an edit clears any stale buttons.
+func detailOrList(ideas Idea.IdeaList, cb CallbackData, ideaID uint64, page int, warning error) (string, *tgbotapi.InlineKeyboardMarkup) {
+	if text, kb, ok := renderIdeaDetail(ideas, cb.IdeaScope, cb.IdeaCat, ideaID); ok {
+		return appendWarning(text, warning), orEmptyKeyboard(kb)
+	}
+	text, kb := renderIdeaList(ideas, cb.IdeaScope, cb.IdeaCat, page)
+	return appendWarning(text, warning), orEmptyKeyboard(kb)
+}
+
+// orEmptyKeyboard returns an empty (non-nil) inline keyboard for nil input, so an
+// edited message drops stale buttons instead of keeping the previous keyboard.
+func orEmptyKeyboard(kb *tgbotapi.InlineKeyboardMarkup) *tgbotapi.InlineKeyboardMarkup {
+	if kb == nil {
+		return emptyInlineKeyboard()
+	}
+	return kb
 }
 
 // enterIdeaEditFromMenu turns the current browser message into the manage-flow
@@ -368,9 +383,14 @@ func (telegramBot *TelegramBotAPI) processIdeaReminderTick(now time.Time) {
 		if loadErr != nil {
 			log.Println("idea reminder tick: load favorites failed:", loadErr.Error())
 		}
-		if batch := pickRandomIdeas(favorites, IdeaReminderBatchSize); len(batch) > 0 {
-			telegramBot.sendIdeaReminder(owner, batch)
+		batch := pickRandomIdeas(favorites, IdeaReminderBatchSize)
+		if len(batch) == 0 {
+			// Nothing to send (a hard load error left the list empty, or the
+			// favorites were just cleared). Leave the schedule due and retry next
+			// tick rather than burning this reminder window.
+			continue
 		}
+		telegramBot.sendIdeaReminder(owner, batch)
 		telegramBot.ideaReminders.Set(owner, now.Add(ideaReminderDelta()))
 	}
 }
