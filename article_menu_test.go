@@ -162,7 +162,7 @@ func TestAddArticleFlowEndToEnd(t *testing.T) {
 	owner := int64(9008)
 
 	start := startFlowGetSend(t, bot, transport, owner, 870, "/addArticle")
-	if !strings.Contains(start.Values.Get("text"), "Article title?") {
+	if !strings.Contains(start.Values.Get("text"), "title?") {
 		t.Fatalf("expected title prompt, got %q", start.Values.Get("text"))
 	}
 	urlPrompt := sendFlowTextGetEdit(t, bot, transport, owner, 871, "Great article")

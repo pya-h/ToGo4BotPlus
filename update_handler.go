@@ -36,6 +36,10 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 		// 2) A reply to an in-progress guided flow.
 		if state, active := telegramBot.flows.Get(chatID); active {
 			telegramBot.handleFlowText(chatID, update.Message.Text, state)
+			// The typed input has been folded into the wizard/manage message; delete
+			// it so the chat isn't littered with seemingly-unanswered inputs and the
+			// updated message stays the latest one the user sees.
+			telegramBot.DeleteMessage(chatID, update.Message.MessageID)
 			return
 		}
 		// 3) Otherwise the existing stateless command handler.

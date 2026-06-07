@@ -75,6 +75,17 @@ func (telegramBotAPI *TelegramBotAPI) SendTextMessageReturningID(response Telegr
 	return sent.MessageID, err
 }
 
+// DeleteMessage removes a message (best-effort). Used to clear a user's typed
+// input once a guided flow has consumed it, so the conversation isn't littered
+// with seemingly-unanswered inputs. In private chats a bot may delete incoming
+// user messages; failures (permissions, >48h, already gone) are ignored.
+func (telegramBotAPI *TelegramBotAPI) DeleteMessage(chatID int64, messageID int) {
+	if messageID == 0 {
+		return
+	}
+	telegramBotAPI.Send(tgbotapi.NewDeleteMessage(chatID, messageID))
+}
+
 func (telegramBotAPI *TelegramBotAPI) EditTextMessage(response TelegramResponse) {
 	msg := tgbotapi.NewEditMessageText(response.TargetChatId, response.MessageBeingEditedId, response.TextMsg)
 	if response.InlineKeyboard != nil {

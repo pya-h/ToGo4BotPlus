@@ -121,16 +121,17 @@ func newAddArticleFlow() *Flow {
 	return &Flow{
 		Name: "addArticle",
 		Steps: []Step{
-			{Key: "title", Prompt: "🔗 Article title?", Kind: StepText, Validate: nonEmptyText},
-			{Key: "url", Prompt: "Paste the link (url).", Kind: StepText, Optional: true},
+			{Key: "title", Label: "Title", Prompt: "🔗 What's the article's title?", Kind: StepText, Validate: nonEmptyText},
+			{Key: "url", Label: "URL", Prompt: "Paste the link (url) to the article.", Kind: StepText, Optional: true},
 			{
 				Key:       "category",
+				Label:     "Category",
 				Prompt:    "Pick a category (or add a custom one).",
 				Kind:      StepDynamicChoice,
 				Optional:  true,
 				OptionsFn: articleCategoryOptions,
 			},
-			{Prompt: "Review your article:", Kind: StepConfirm},
+			{Prompt: "Review your article before saving:", Kind: StepConfirm},
 		},
 		Summary: func(data map[string]string) string {
 			return fmt.Sprintf("Title: %s\nURL: %s\nCategory: %s",
@@ -165,13 +166,15 @@ func newAddIdeaFlow() *Flow {
 		Steps: []Step{
 			{
 				Key:      "text",
-				Prompt:   "💡 What's your idea?",
+				Label:    "Idea",
+				Prompt:   "💡 What's your idea? Type it out.",
 				Kind:     StepText,
 				Validate: nonEmptyText,
 			},
 			{
 				Key:    "priority",
-				Prompt: "How important is it?",
+				Label:  "Priority",
+				Prompt: "How important is this idea?",
 				Kind:   StepChoice,
 				Options: []FlowOption{
 					{Label: "🔴 High", Value: "high"},
@@ -180,13 +183,14 @@ func newAddIdeaFlow() *Flow {
 			},
 			{
 				Key:       "category",
+				Label:     "Category",
 				Prompt:    "Pick a category (or add a custom one).",
 				Kind:      StepDynamicChoice,
 				Optional:  true,
 				OptionsFn: ideaCategoryOptions,
 			},
 			{
-				Prompt: "Review your idea:",
+				Prompt: "Review your idea before saving:",
 				Kind:   StepConfirm,
 			},
 		},
@@ -230,23 +234,23 @@ func newAddTogoFlow() *Flow {
 	return &Flow{
 		Name: "addTogo",
 		Steps: []Step{
-			{Key: "title", Prompt: "➕ Togo title?", Kind: StepText, Validate: nonEmptyText},
-			{Key: "weight", Prompt: "Weight (importance)?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "title", Label: "Title", Prompt: "➕ What's the togo's title?", Kind: StepText, Validate: nonEmptyText},
+			{Key: "weight", Label: "Weight", Prompt: "How important is it (weight)?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: numberOptions(1, 2, 3, 5), Validate: validatePositiveInt},
-			{Key: "progress", Prompt: "Progress so far (%)?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "progress", Label: "Progress", Prompt: "Progress so far (%)?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: numberOptions(0, 25, 50, 75, 100), Validate: validatePercent},
-			{Key: "extra", Prompt: "Is it an extra togo?", Kind: StepChoice, Options: extraOptions()},
-			{Key: "day", Prompt: "Schedule in how many days?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "extra", Label: "Type", Prompt: "Is it an extra togo?", Kind: StepChoice, Options: extraOptions()},
+			{Key: "day", Label: "In days", Prompt: "Schedule in how many days from now?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: staticOptions(
 					FlowOption{Label: "Today", Value: "0"},
 					FlowOption{Label: "Tomorrow", Value: "1"},
 					FlowOption{Label: "+2 days", Value: "2"},
 					FlowOption{Label: "+7 days", Value: "7"},
 				), Validate: validateNonNegativeInt},
-			{Key: "time", Prompt: "At what time (HH:MM)?", Kind: StepText, Optional: true, Validate: validateHHMM},
-			{Key: "duration", Prompt: "Duration in minutes?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "time", Label: "Time", Prompt: "At what time of day (HH:MM)?", Kind: StepText, Optional: true, Validate: validateHHMM},
+			{Key: "duration", Label: "Duration", Prompt: "How long will it take (minutes)?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: numberOptions(15, 30, 60, 90), Validate: validatePositiveInt},
-			{Prompt: "Review your togo:", Kind: StepConfirm},
+			{Prompt: "Review your togo before saving:", Kind: StepConfirm},
 		},
 		Summary: func(data map[string]string) string {
 			return fmt.Sprintf(
@@ -300,19 +304,19 @@ func newAddTaskFlow() *Flow {
 	return &Flow{
 		Name: "addTask",
 		Steps: []Step{
-			{Key: "title", Prompt: "^ Task title?", Kind: StepText, Validate: nonEmptyText},
-			{Key: "weight", Prompt: "Weight (importance)?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "title", Label: "Title", Prompt: "^ What's the task's title?", Kind: StepText, Validate: nonEmptyText},
+			{Key: "weight", Label: "Weight", Prompt: "How important is it (weight)?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: numberOptions(1, 2, 3, 5), Validate: validatePositiveInt},
-			{Key: "progress", Prompt: "Progress so far (%)?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "progress", Label: "Progress", Prompt: "Progress so far (%)?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: numberOptions(0, 25, 50, 75, 100), Validate: validatePercent},
-			{Key: "extra", Prompt: "Is it an extra task?", Kind: StepChoice, Options: extraOptions()},
-			{Key: "start", Prompt: "When does it start?", Kind: StepDynamicChoice, Optional: true,
+			{Key: "extra", Label: "Type", Prompt: "Is it an extra task?", Kind: StepChoice, Options: extraOptions()},
+			{Key: "start", Label: "Start", Prompt: "When does it start?", Kind: StepDynamicChoice, Optional: true,
 				OptionsFn: staticOptions(
 					FlowOption{Label: "Today", Value: "0"},
 					FlowOption{Label: "Tomorrow", Value: "1"},
 					FlowOption{Label: "+7 days", Value: "7"},
 				), Validate: validateStartDate},
-			{Prompt: "Review your task:", Kind: StepConfirm},
+			{Prompt: "Review your task before saving:", Kind: StepConfirm},
 		},
 		Summary: func(data map[string]string) string {
 			start := data["start"]

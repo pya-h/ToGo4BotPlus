@@ -40,6 +40,7 @@ type FlowOption struct {
 type Step struct {
 	Key       string
 	Prompt    string
+	Label     string // short label shown in the running "answers so far" summary
 	Kind      StepKind
 	Optional  bool
 	Options   []FlowOption                    // static choices (StepChoice)
@@ -366,6 +367,11 @@ func (telegramBot *TelegramBotAPI) handleFlowCallback(callbackQuery *tgbotapi.Ca
 
 // ---------------------- Rendering helpers -------------------------------------
 
+// flowDivider separates the current prompt from the running "answers so far"
+// block. It is deliberately wide so the message bubble keeps a width comparable
+// to the inline button rows below it.
+const flowDivider = "────────────────────"
+
 func stepText(state *FlowState, flow *Flow) string {
 	step := flow.Steps[state.Step]
 	if step.Kind == StepConfirm {
@@ -373,7 +379,7 @@ func stepText(state *FlowState, flow *Flow) string {
 		if flow.Summary != nil {
 			summary = flow.Summary(state.Data)
 		}
-		return fmt.Sprintf("%s\n\n%s", step.Prompt, summary)
+		return fmt.Sprintf("%s\n%s\n%s", step.Prompt, flowDivider, summary)
 	}
 
 	header := step.Prompt
@@ -382,11 +388,43 @@ func stepText(state *FlowState, flow *Flow) string {
 	}
 	hint := ""
 	if state.AwaitText {
-		hint = "\n\n✍️ Type your answer."
+		hint = "\n\n✍️ Type your answer below."
 	} else if step.Kind == StepChoice || step.Kind == StepDynamicChoice || step.Kind == StepPickItem {
-		hint = "\n\n👇 Pick an option."
+		hint = "\n\n👇 Pick an option below."
 	}
-	return fmt.Sprintf("%s\n\nStep %d/%d%s", header, state.Step+1, len(flow.Steps), hint)
+	base := fmt.Sprintf("%s\n\nStep %d of %d%s", header, state.Step+1, len(flow.Steps), hint)
+	if collected := collectedSummary(state, flow); collected != "" {
+		base += fmt.Sprintf("\n%s\n%s", flowDivider, collected)
+	}
+	return base
+}
+
+// collectedSummary renders the labelled values gathered on the steps completed
+// so far, so the user sees their accumulating answers as the wizard advances.
+func collectedSummary(state *FlowState, flow *Flow) string {
+	lines := make([]string, 0, state.Step)
+	for s := 0; s < state.Step && s < len(flow.Steps); s++ {
+		st := flow.Steps[s]
+		if st.Label == "" || st.Kind == StepConfirm {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s", st.Label, stepDisplayValue(st, state.Data[st.Key])))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// stepDisplayValue maps a stored value to its human label (for choice steps) and
+// renders skipped/empty optional answers as a dash.
+func stepDisplayValue(step Step, value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "—"
+	}
+	for _, o := range step.Options {
+		if o.Value == value {
+			return o.Label
+		}
+	}
+	return value
 }
 
 func stepKeyboard(state *FlowState, flow *Flow) *tgbotapi.InlineKeyboardMarkup {

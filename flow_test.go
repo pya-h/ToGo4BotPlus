@@ -433,6 +433,76 @@ func TestRegisterBotCommands(t *testing.T) {
 	}
 }
 
+func TestFlowShowsRunningAnswerSummary(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(9600)
+
+	startFlowGetSend(t, bot, transport, chatID, 1600, "/addArticle")
+	// Providing the title advances to the url step, which must now echo the
+	// collected title under a divider.
+	urlPrompt := sendFlowTextGetEdit(t, bot, transport, chatID, 1601, "My Great Article")
+	if !strings.Contains(urlPrompt, "Title: My Great Article") {
+		t.Fatalf("expected the running summary to show the title, got %q", urlPrompt)
+	}
+	if !strings.Contains(urlPrompt, flowDivider) {
+		t.Fatalf("expected a divider above the summary, got %q", urlPrompt)
+	}
+}
+
+func TestFlowDeletesConsumedUserInput(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(9601)
+	startFlowGetSend(t, bot, transport, chatID, 1610, "/addArticle")
+
+	before := transport.countEndpoint("deleteMessage")
+	bot.HandleUpdate(tgbotapi.Update{Message: &tgbotapi.Message{
+		MessageID: 1611, Text: "Some title", Chat: &tgbotapi.Chat{ID: chatID},
+	}})
+	if got := transport.countEndpoint("deleteMessage"); got != before+1 {
+		t.Fatalf("expected the typed input to be deleted once, delta=%d", got-before)
+	}
+}
+
+func TestFlowSummaryShowsChoiceLabelNotRawValue(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(9602)
+
+	startFlowGetSend(t, bot, transport, chatID, 1620, "/addIdea")
+	sendFlowTextGetEdit(t, bot, transport, chatID, 1621, "Launch a startup") // -> priority step
+	// Pick High; the category step must echo the human label, not the raw "high".
+	cat := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1621,
+		(CallbackData{Action: FlowSelect, FlowOpt: 0}).Json())
+	if !strings.Contains(cat, "Priority: 🔴 High") {
+		t.Fatalf("expected the choice label in the summary, got %q", cat)
+	}
+	if strings.Contains(cat, "Priority: high") {
+		t.Fatalf("summary should not show the raw option value: %q", cat)
+	}
+}
+
+func TestManageEditDeletesTypedValue(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(9603)
+	seedIdea(t, chatID, "manage me", false, "")
+
+	startFlowGetSend(t, bot, transport, chatID, 1630, "/ideas")
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // card
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowEdit}).Json())               // field list
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // text field -> type
+
+	before := transport.countEndpoint("deleteMessage")
+	bot.HandleUpdate(tgbotapi.Update{Message: &tgbotapi.Message{
+		MessageID: 1632, Text: "new manage text", Chat: &tgbotapi.Chat{ID: chatID},
+	}})
+	if got := transport.countEndpoint("deleteMessage"); got != before+1 {
+		t.Fatalf("expected the manage edit text to be deleted, delta=%d", got-before)
+	}
+}
+
 func TestFlowValidators(t *testing.T) {
 	ok := func(err error) bool { return err == nil }
 	if !ok(validatePositiveInt("3")) || ok(validatePositiveInt("0")) || ok(validatePositiveInt("x")) {
