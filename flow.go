@@ -121,7 +121,7 @@ var flowCommandToFlowName = map[string]string{
 	"articles":   "manageArticle",
 }
 
-// parseFlowCommand detects a guided-flow slash command (or /cancel). It returns
+// parseFlowCommand detects a e-flow slash command (or /cancel). It returns
 // the normalized command, any trailing argument, and whether it matched.
 func parseFlowCommand(text string) (cmd string, arg string, ok bool) {
 	text = strings.TrimSpace(text)
@@ -367,9 +367,9 @@ func (telegramBot *TelegramBotAPI) handleFlowCallback(callbackQuery *tgbotapi.Ca
 
 // ---------------------- Rendering helpers -------------------------------------
 
-// flowDivider separates the current prompt from the running "answers so far"
-// block. It is deliberately wide so the message bubble keeps a width comparable
-// to the inline button rows below it.
+// flowDivider separates a step's prompt from the running summary of answers
+// collected so far. It is a fixed-width rule so the wizard bubble keeps a stable
+// minimum width, roughly matching the inline button rows below it.
 const flowDivider = "────────────────────"
 
 func stepText(state *FlowState, flow *Flow) string {
@@ -399,8 +399,9 @@ func stepText(state *FlowState, flow *Flow) string {
 	return base
 }
 
-// collectedSummary renders the labelled values gathered on the steps completed
-// so far, so the user sees their accumulating answers as the wizard advances.
+// collectedSummary renders the "answers so far" block: one "Label: value" line
+// per already-answered step (in order), so the user can see their typed input
+// echoed back after each step's message is deleted.
 func collectedSummary(state *FlowState, flow *Flow) string {
 	lines := make([]string, 0, state.Step)
 	for s := 0; s < state.Step && s < len(flow.Steps); s++ {
@@ -413,8 +414,9 @@ func collectedSummary(state *FlowState, flow *Flow) string {
 	return strings.Join(lines, "\n")
 }
 
-// stepDisplayValue maps a stored value to its human label (for choice steps) and
-// renders skipped/empty optional answers as a dash.
+// stepDisplayValue maps a stored value to its human label for the summary: an
+// empty (skipped) value shows "—", and a choice value shows its option label
+// rather than the raw stored value (e.g. "🔴 High" instead of "high").
 func stepDisplayValue(step Step, value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "—"
