@@ -105,7 +105,8 @@ func isCommand(term string) bool {
 	switch term {
 	case "+", "%", "#", "#️⃣", "$", "✅", "❌", "/db", "/now",
 		"^", "~", "~s", "&", "✅T", "✅t", "❌T", "❌t",
-		"tk", "TK", "*", ";", ";u", "*x":
+		"tk", "TK", "*", ";", ";u", "*x",
+		">", ">l", ">u", ">x":
 		return true
 	default:
 		return false

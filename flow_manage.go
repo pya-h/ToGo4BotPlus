@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"ToGo4BotPlus/Article"
 	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
@@ -30,9 +31,10 @@ const (
 
 // manageFlowEntity maps a manage flow name to its entity key.
 var manageFlowEntity = map[string]string{
-	"manageIdea": "idea",
-	"manageTogo": "togo",
-	"manageTask": "task",
+	"manageIdea":    "idea",
+	"manageTogo":    "togo",
+	"manageTask":    "task",
+	"manageArticle": "article",
 }
 
 type manageItem struct {
@@ -67,6 +69,8 @@ func manageEntityFor(entity string) ManageEntity {
 		return togoManager{}
 	case "task":
 		return taskManager{}
+	case "article":
+		return articleManager{}
 	default:
 		return nil
 	}
@@ -680,6 +684,71 @@ func (taskManager) ApplyEdit(chatID int64, id uint64, field, value string) error
 	}
 	terms := togoEditTerms(id, field, value)
 	_, err = tasks.Update(chatID, terms)
+	return err
+}
+
+type articleManager struct{}
+
+func (articleManager) Label() string              { return "article" }
+func (articleManager) CanToggle() bool            { return false }
+func (articleManager) Toggle(int64, uint64) error { return nil }
+
+func (articleManager) ListItems(chatID int64) ([]manageItem, error) {
+	articles, err := Article.Load(chatID, 0)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]manageItem, 0, len(articles))
+	for _, article := range articles {
+		items = append(items, manageItem{ID: article.Id, Label: article.Header()})
+	}
+	return items, nil
+}
+
+func (articleManager) Card(chatID int64, id uint64) (string, bool) {
+	articles, err := Article.Load(chatID, 0)
+	if err != nil {
+		return "", false
+	}
+	article, err := articles.Get(id)
+	if err != nil {
+		return "", false
+	}
+	return article.ToString(), true
+}
+
+func (articleManager) Delete(chatID int64, id uint64) error {
+	articles, err := Article.Load(chatID, 0)
+	if err != nil {
+		return err
+	}
+	_, err = articles.Remove(chatID, id)
+	return err
+}
+
+func (articleManager) EditFields() []editField {
+	return []editField{
+		{Key: "title", Label: "📝 Title", Kind: StepText},
+		{Key: "url", Label: "🔗 URL", Kind: StepText},
+		{Key: "category", Label: "🏷 Category", Kind: StepText},
+	}
+}
+
+func (articleManager) ApplyEdit(chatID int64, id uint64, field, value string) error {
+	articles, err := Article.Load(chatID, 0)
+	if err != nil {
+		return err
+	}
+	terms := []string{strconv.FormatUint(id, 10)}
+	switch field {
+	case "title":
+		terms = append(terms, ArticleTitleFlag, value)
+	case "url":
+		terms = append(terms, ArticleUrlFlag, value)
+	case "category":
+		terms = append(terms, ArticleCategoryFlag, value)
+	}
+	_, err = articles.Update(chatID, terms)
 	return err
 }
 

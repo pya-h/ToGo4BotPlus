@@ -47,9 +47,10 @@ The bot offers two complementary ways to drive it:
 2. **Guided wizards (Type B)** — slash commands that start a *step-by-step*
    conversation, editing a single message as you go and offering inline buttons
    for option selection:
-   - `/addIdea`, `/addTogo`, `/addTask` — guided creation.
-   - `/ideas`, `/togos`, `/tasks` — manage menu: pick an item, then edit fields,
-     toggle done (togos/tasks), or delete it.
+   - `/addIdea`, `/addTogo`, `/addTask`, `/addArticle` — guided creation.
+   - `/ideas`, `/togos`, `/tasks`, `/articles` — manage menu: pick an item, then
+     edit fields, toggle done (togos/tasks), or delete it.
+   - `/ideabook`, `/favorites`, `/articlebook` — interactive paginated browsers.
    - `/cancel` — abort the current wizard.
 
    These commands are also registered with Telegram so they appear in the native
@@ -454,6 +455,53 @@ processed.
 | `*x` | (default) | Remove ideas via inline keyboard |
 | `/ideabook` | — | Interactive idea browser (paginated, heart/edit/remove) |
 | `/favorites` | — | Interactive browser of favorite ideas |
+
+## Articles (saved links)
+
+Articles are a simpler sibling of ideas: a bookmark you want to revisit. Each
+article has a **title**, an optional **category** (by id, in its own
+`article_categories` table, exactly like ideas) and a **url**. There is no
+priority, favorite, progress or "done" state.
+
+### Article commands (Type A)
+
+Save an article:
+
+```bash
+>  <title>  [+u  <url>]  [+c  <category>]
+```
+
+- `+u  <url>` sets the link
+- `+c  <category>` assigns a category
+
+List / filter:
+
+| Command | Token | Meaning |
+|---------|-------|---------|
+| `>` | (text) | Add a new article |
+| `>l` | (default) | List all articles (text report) |
+| `>l` | `c  <category>` | List articles by category |
+| `>u` | `id` | Get/update an article by id (`+t` title, `+u` url, `+c` category) |
+| `>x` | (default) | Remove articles via inline keyboard |
+| `/articlebook` | — | Interactive article browser (paginated, edit/remove) |
+
+### Guided & interactive (Type B)
+
+- `/addArticle` — guided wizard: title → url → category → confirm.
+- `/articles` — manage menu: pick an article, then edit (title / url / category)
+  or delete it.
+- `/articlebook` — the same stateless, paginated browser as `/ideabook`: a list
+  of `#id Category: title` with one button per article; tap one to see its full
+  detail (title, category, url) with **🗑 Remove / ✏️ Edit** and
+  **⬅️ Prev / 🔙 Menu / Next ➡️**.
+
+### Daily article reminder
+
+Once a day at **`ArticleReminderHour`** (a constant in [constants.go](constants.go),
+default 15:00 Asia/Tehran), the bot scans every user that has at least one
+article, picks one of theirs at random, and sends it. The url is placed on its
+own line and the message is sent as plain text, so Telegram renders the link
+preview (and an Instant View for supported sites) automatically.
 
 ## Testing
 

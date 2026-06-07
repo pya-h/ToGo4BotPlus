@@ -110,12 +110,14 @@ func (telegramBot *TelegramBotAPI) ensureFlows() {
 
 // flowCommandToFlowName maps a (lowercased) slash command to a registered flow.
 var flowCommandToFlowName = map[string]string{
-	"addidea": "addIdea",
-	"addtogo": "addTogo",
-	"addtask": "addTask",
-	"ideas":   "manageIdea",
-	"togos":   "manageTogo",
-	"tasks":   "manageTask",
+	"addidea":    "addIdea",
+	"addtogo":    "addTogo",
+	"addtask":    "addTask",
+	"addarticle": "addArticle",
+	"ideas":      "manageIdea",
+	"togos":      "manageTogo",
+	"tasks":      "manageTask",
+	"articles":   "manageArticle",
 }
 
 // parseFlowCommand detects a guided-flow slash command (or /cancel). It returns

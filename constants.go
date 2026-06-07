@@ -39,6 +39,21 @@ const (
 	IdeaTextFlag          = "+t"
 )
 
+const (
+	ArticleAddCommand    = ">"
+	ArticleListCommand   = ">l"
+	ArticleUpdateCommand = ">u"
+	ArticleRemoveCommand = ">x"
+	ArticleCategoryToken = "c" // `>l  c  <category>` filters by category
+	ArticleTitleFlag     = "+t"
+	ArticleUrlFlag       = "+u"
+	ArticleCategoryFlag  = "+c"
+
+	// ArticleReminderHour is the hour (0-23, Asia/Tehran) of the daily article
+	// reminder. Change this to move the reminder time.
+	ArticleReminderHour = 15
+)
+
 const HELP_MESSAGE = "WTF?\n```\n" +
 	`## Commands
 ## +: New Togo:
@@ -186,14 +201,39 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 
 	Remove ideas using inline keyboard.
 
+## Articles (saved links, separate from everything else):
+=>     >     title     [+u     url]     [+c     category]     [...]
+
+	Save an article link. +u sets the url, +c sets a category.
+
+=>     >l     [...]
+
+	List all articles.
+
+=>     >l     c     category     [...]
+
+	List articles filtered by a category.
+
+=>     >u     id     [+t     new_title]     [+u     url]     [+c     category]     [...]
+
+	Get / update one article by id. +t changes the title.
+
+=>     >x
+
+	Remove articles using inline keyboard.
+
 ## Guided menus (step by step):
-*   /addidea, /addtogo, /addtask open a guided wizard with inline buttons.
-*   /ideas, /togos, /tasks open a manage menu to edit or delete items.
+*   /addidea, /addtogo, /addtask, /addarticle open a guided wizard with inline buttons.
+*   /ideas, /togos, /tasks, /articles open a manage menu to edit or delete items.
 *   /cancel aborts the current guided menu.
 
-## Idea browser & favorites:
+## Idea & article browsers:
 *   /ideabook opens an interactive, paginated idea browser. Tap an idea to view
     it, then Remove / Heart (favorite) / Edit, or step Prev/Next through the list.
 *   /favorites opens the same browser limited to your hearted ideas.
 *   Heart an idea to make it a favorite; the bot periodically reminds you of a
-    few random favorites so good ideas do not get forgotten.` + "\n```"
+    few random favorites so good ideas do not get forgotten.
+*   /articlebook opens the same kind of browser for your saved articles
+    (Remove / Edit / Prev / Next).
+*   Once a day the bot sends you one of your saved articles at random, with its
+    link preview.` + "\n```"

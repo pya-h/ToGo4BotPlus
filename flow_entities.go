@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"ToGo4BotPlus/Article"
 	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
@@ -20,6 +21,7 @@ func buildFlows() map[string]*Flow {
 	flows["addIdea"] = newAddIdeaFlow()
 	flows["addTogo"] = newAddTogoFlow()
 	flows["addTask"] = newAddTaskFlow()
+	flows["addArticle"] = newAddArticleFlow()
 	return flows
 }
 
@@ -101,6 +103,60 @@ func ideaCategoryOptions(chatID int64) []FlowOption {
 		opts = append(opts, FlowOption{Label: c, Value: c})
 	}
 	return opts
+}
+
+func articleCategoryOptions(chatID int64) []FlowOption {
+	cats, err := Article.LoadCategories(chatID)
+	if err != nil {
+		return nil
+	}
+	opts := make([]FlowOption, 0, len(cats))
+	for _, c := range cats {
+		opts = append(opts, FlowOption{Label: c, Value: c})
+	}
+	return opts
+}
+
+func newAddArticleFlow() *Flow {
+	return &Flow{
+		Name: "addArticle",
+		Steps: []Step{
+			{Key: "title", Prompt: "🔗 Article title?", Kind: StepText, Validate: nonEmptyText},
+			{Key: "url", Prompt: "Paste the link (url).", Kind: StepText, Optional: true},
+			{
+				Key:       "category",
+				Prompt:    "Pick a category (or add a custom one).",
+				Kind:      StepDynamicChoice,
+				Optional:  true,
+				OptionsFn: articleCategoryOptions,
+			},
+			{Prompt: "Review your article:", Kind: StepConfirm},
+		},
+		Summary: func(data map[string]string) string {
+			return fmt.Sprintf("Title: %s\nURL: %s\nCategory: %s",
+				data["title"], orDash(data["url"], "—"), orDash(data["category"], "—"))
+		},
+		Commit: func(chatID int64, data map[string]string) (string, error) {
+			terms := []string{data["title"]}
+			if url := strings.TrimSpace(data["url"]); url != "" {
+				terms = append(terms, ArticleUrlFlag, url)
+			}
+			if category := strings.TrimSpace(data["category"]); category != "" {
+				terms = append(terms, ArticleCategoryFlag, category)
+			}
+
+			article, err := Article.Extract(chatID, terms)
+			if err != nil {
+				return "", err
+			}
+			id, err := article.Save()
+			if err != nil {
+				return "", err
+			}
+			article.Id = id
+			return fmt.Sprintf("✅ Saved!\n\n%s", article.ToString()), nil
+		},
+	}
 }
 
 func newAddIdeaFlow() *Flow {

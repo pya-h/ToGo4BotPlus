@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"ToGo4BotPlus/Article"
 	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
@@ -104,6 +105,9 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		{"tasks", "Manage your tasks"},
 		{"ideabook", "Browse your ideas (interactive)"},
 		{"favorites", "Browse your favorite ideas"},
+		{"addarticle", "Save an article link (guided)"},
+		{"articles", "Manage your articles"},
+		{"articlebook", "Browse your articles (interactive)"},
 		{"cancel", "Cancel the current guided menu"},
 		{"now", "Show current date/time"},
 	}
@@ -148,6 +152,12 @@ const (
 	IdeaMenuFav    // toggle an idea's favorite flag from the browser
 	IdeaMenuRemove // delete an idea from the browser, return to the list
 	IdeaMenuEdit   // hand the browser message off to the manage-flow edit screens
+	RemoveArticle  // legacy `>x` paginated remove menu
+	ShowArticleMenuPage
+	ArticleMenuList   // render a page of the interactive article browser
+	ArticleMenuOpen   // open one article's detail card in the browser
+	ArticleMenuRemove // delete an article from the browser, return to the list
+	ArticleMenuEdit   // hand the browser message off to the manage-flow edit screens
 )
 
 type CallbackData struct {
@@ -164,6 +174,7 @@ type CallbackData struct {
 	FlowOpt             int         `json:"FO,omitempty"` // selected option index within an active guided flow step
 	IdeaScope           int         `json:"IK,omitempty"` // idea-browser scope (all / high / favorites / category)
 	IdeaCat             int64       `json:"IC,omitempty"` // category id when the idea-browser scope is "category"
+	ArtCat              int64       `json:"AC,omitempty"` // category id filter for the article browser (0 = all)
 }
 
 func (callbackData CallbackData) Json() string {
@@ -311,6 +322,7 @@ func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 			{tgbotapi.KeyboardButton{Text: "~"}, tgbotapi.KeyboardButton{Text: "~  +i"}, tgbotapi.KeyboardButton{Text: "%  t"}},
 			{tgbotapi.KeyboardButton{Text: "✅T"}, tgbotapi.KeyboardButton{Text: "❌T"}, tgbotapi.KeyboardButton{Text: "~s  4"}},
 			{tgbotapi.KeyboardButton{Text: ";"}, tgbotapi.KeyboardButton{Text: ";  !"}, tgbotapi.KeyboardButton{Text: "*x"}},
+			{tgbotapi.KeyboardButton{Text: ">l"}, tgbotapi.KeyboardButton{Text: ">x"}},
 		}}
 }
 
@@ -459,6 +471,9 @@ func main() {
 	if err := Idea.InitDatabase(); err != nil {
 		panic(err)
 	}
+	if err := Article.InitDatabase(); err != nil {
+		panic(err)
+	}
 
 	bot.registerBotCommands()
 
@@ -472,6 +487,7 @@ func main() {
 
 	go bot.NotifyRightNowTogos() // run the scheduler that will check which togos are hapening right now, for each user
 	go bot.RemindFavoriteIdeas() // hourly: nudge users about a random batch of their favorite ideas
+	go bot.RemindArticles()      // daily at ArticleReminderHour: send each user a random saved article
 	log.Println("configured.")
 	for update := range updates {
 		bot.HandleUpdate(update)

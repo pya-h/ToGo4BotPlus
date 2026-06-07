@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"ToGo4BotPlus/Article"
 	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
@@ -367,6 +368,71 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			text, kb := renderIdeaList(ideas, scope, 0, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
+		case "/articlebook":
+			articles, warning := loadArticlesForScope(message.Chat.ID, 0)
+			text, kb := renderArticleList(articles, 0, 0)
+			response.TextMsg = appendWarning(text, warning)
+			response.InlineKeyboard = kb
+		case ArticleAddCommand:
+			if i+1 < numOfTerms {
+				if article, err := Article.Extract(message.Chat.ID, terms[i+1:]); err == nil {
+					if article.Id, err = article.Save(); err == nil {
+						response.TextMsg = fmt.Sprintf("🔗 Article #%d saved.", article.Id)
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = err.Error()
+				}
+			} else {
+				response.TextMsg = "You must provide the article title."
+			}
+		case ArticleListCommand:
+			category := ""
+			if i+1 < numOfTerms && terms[i+1] == ArticleCategoryToken && i+2 < numOfTerms {
+				category = terms[i+2]
+			}
+			categoryID := int64(0)
+			if category != "" {
+				resolved, lookupErr := Article.LookupCategoryID(message.Chat.ID, category)
+				if lookupErr != nil {
+					response.TextMsg = lookupErr.Error()
+					break
+				}
+				if resolved == 0 {
+					response.TextMsg = fmt.Sprintf("🔗 No articles found in category %q.", category)
+					break
+				}
+				categoryID = resolved
+			}
+			articles, warning := Article.Load(message.Chat.ID, categoryID)
+			response.TextMsg = BuildArticleListReport(articles, category)
+			if warning != nil {
+				response.TextMsg = fmt.Sprintf("%s\n\nwarning: %s", response.TextMsg, warning.Error())
+			}
+		case ArticleUpdateCommand:
+			if i+1 < numOfTerms {
+				articles, err := Article.Load(message.Chat.ID, 0)
+				if resp, updateErr := articles.Update(message.Chat.ID, terms[i+1:]); updateErr == nil {
+					response.TextMsg = resp
+				} else if err != nil {
+					response.TextMsg = err.Error()
+				} else {
+					response.TextMsg = updateErr.Error()
+				}
+			} else {
+				response.TextMsg = "You must provide the article identifier!"
+			}
+		case ArticleRemoveCommand:
+			articles, warning := Article.Load(message.Chat.ID, 0)
+			if len(articles) >= 1 {
+				response.TextMsg = "Here are your articles to remove:"
+				response.InlineKeyboard = ArticleInlineKeyboardMenu(articles, RemoveArticle, 0)
+			} else if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "No articles so far..."
+			}
 		case TogoTickByIdCommand:
 			if i+1 < numOfTerms {
 				var id uint64
@@ -760,6 +826,44 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 
 	case IdeaMenuList, IdeaMenuOpen, IdeaMenuFav, IdeaMenuRemove, IdeaMenuEdit:
 		telegramBot.handleIdeaMenuCallback(callbackData, response)
+
+	case RemoveArticle:
+		articles, warning := Article.Load(response.TargetChatId, 0)
+		if articles == nil {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "Could not load articles for removal."
+			}
+			break
+		}
+		updated, err := articles.Remove(response.TargetChatId, uint64(callbackData.ID))
+		if err != nil {
+			response.TextMsg = err.Error()
+			break
+		}
+		if len(updated) >= 1 {
+			response.TextMsg = "🗑 Article removed. Pick the next article to remove ..."
+			response.InlineKeyboard = ArticleInlineKeyboardMenu(updated, RemoveArticle, callbackData.MenuPage)
+		} else {
+			response.TextMsg = "🗑 Article removed. No articles left in this view."
+		}
+
+	case ShowArticleMenuPage:
+		articles, warning := Article.Load(response.TargetChatId, 0)
+		if len(articles) == 0 {
+			if warning != nil {
+				response.TextMsg = warning.Error()
+			} else {
+				response.TextMsg = "No articles to show."
+			}
+			break
+		}
+		response.InlineKeyboard = ArticleInlineKeyboardMenu(articles, callbackData.MenuAction, callbackData.MenuPage)
+		response.TextMsg = "Select an article to remove ..."
+
+	case ArticleMenuList, ArticleMenuOpen, ArticleMenuRemove, ArticleMenuEdit:
+		telegramBot.handleArticleMenuCallback(callbackData, response)
 
 	default:
 		response.TextMsg = "Unsupported callback action."

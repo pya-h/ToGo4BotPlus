@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"ToGo4BotPlus/Article"
 	"ToGo4BotPlus/Idea"
 	"ToGo4BotPlus/Task"
 	"ToGo4BotPlus/Togo"
@@ -131,6 +132,9 @@ func withTempWorkingDir(t *testing.T, initDB bool) {
 		}
 		if err := Idea.InitDatabase(); err != nil {
 			t.Fatalf("failed to initialize isolated idea db: %v", err)
+		}
+		if err := Article.InitDatabase(); err != nil {
+			t.Fatalf("failed to initialize isolated article db: %v", err)
 		}
 	}
 }
