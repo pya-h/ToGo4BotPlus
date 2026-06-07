@@ -86,7 +86,7 @@ func seedIdea(t *testing.T, ownerID int64, text string, high bool, category stri
 	return id
 }
 
-func TestHandleUpdateUnknownCommandReturnsHelp(t *testing.T) {
+func TestHandleUpdateUnknownCommandReturnsError(t *testing.T) {
 	bot, transport := newRecordingBot(t)
 
 	update := tgbotapi.Update{Message: &tgbotapi.Message{
@@ -107,11 +107,97 @@ func TestHandleUpdateUnknownCommandReturnsHelp(t *testing.T) {
 	if req.Values.Get("reply_to_message_id") != "17" {
 		t.Fatalf("expected reply_to_message_id 17, got %q", req.Values.Get("reply_to_message_id"))
 	}
-	if req.Values.Get("text") != HELP_MESSAGE {
-		t.Fatal("expected unknown command to return HELP_MESSAGE")
+	if req.Values.Get("text") != UNKNOWN_COMMAND_MESSAGE {
+		t.Fatalf("expected unknown command to return the error notice, got %q", req.Values.Get("text"))
 	}
 	if !strings.Contains(req.Values.Get("reply_markup"), "keyboard") {
 		t.Fatalf("expected reply keyboard markup, got %q", req.Values.Get("reply_markup"))
+	}
+}
+
+func TestHandleUpdateStartResetsAndWelcomes(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(7050)
+
+	// Put the user mid guided-flow, then /start must wipe that state.
+	bot.flows.Set(chatID, &FlowState{Flow: "addTogo", Step: 1, Data: map[string]string{}})
+
+	bot.HandleUpdate(tgbotapi.Update{Message: &tgbotapi.Message{
+		MessageID: 20,
+		Text:      "/start",
+		Chat:      &tgbotapi.Chat{ID: chatID},
+	}})
+
+	if _, active := bot.flows.Get(chatID); active {
+		t.Fatal("expected /start to clear the active guided-flow state")
+	}
+	req, ok := transport.lastEndpoint("sendMessage")
+	if !ok {
+		t.Fatal("expected a welcome sendMessage for /start")
+	}
+	if req.Values.Get("text") != WELCOME_MESSAGE {
+		t.Fatalf("expected the welcome message, got %q", req.Values.Get("text"))
+	}
+	if !strings.Contains(req.Values.Get("reply_markup"), "keyboard") {
+		t.Fatalf("expected the main keyboard on /start, got %q", req.Values.Get("reply_markup"))
+	}
+}
+
+func TestHandleUpdateHelpCommand(t *testing.T) {
+	bot, transport := newRecordingBot(t)
+
+	bot.HandleUpdate(tgbotapi.Update{Message: &tgbotapi.Message{
+		MessageID: 21,
+		Text:      "/help",
+		Chat:      &tgbotapi.Chat{ID: 7051},
+	}})
+
+	req, ok := transport.lastEndpoint("sendMessage")
+	if !ok {
+		t.Fatal("expected sendMessage for /help")
+	}
+	if req.Values.Get("text") != HELP_MESSAGE {
+		t.Fatalf("expected /help to return HELP_MESSAGE, got %q", req.Values.Get("text"))
+	}
+}
+
+func TestHandleUpdateRemoveTogoCommands(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(7052)
+	seedTogo(t, chatID, "removable togo", 0)
+
+	for _, cmd := range []string{"/removetodaytogos", "/removealltogos"} {
+		text := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 22, cmd)
+		if !strings.Contains(text, "remove") {
+			t.Fatalf("expected %q to open a remove menu, got %q", cmd, text)
+		}
+		req, _ := transport.lastEndpoint("sendMessage")
+		if req.Values.Get("reply_markup") == "" {
+			t.Fatalf("expected an inline remove keyboard for %q", cmd)
+		}
+	}
+}
+
+func TestHandleUpdateTaskReminderCommand(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	chatID := int64(7053)
+
+	// No-arg form reports the current frequency.
+	text := sendTextUpdateAndGetLastText(t, bot, transport, chatID, 23, "/taskreminder")
+	if !strings.Contains(text, "reminder") {
+		t.Fatalf("expected reminder frequency info, got %q", text)
+	}
+
+	// Two-space arg form updates it (matches the bot's separator convention).
+	text = sendTextUpdateAndGetLastText(t, bot, transport, chatID, 24, "/taskreminder  2")
+	if !strings.Contains(text, "2") {
+		t.Fatalf("expected confirmation of 2 reminders/day, got %q", text)
+	}
+	if setting, err := Task.GetReminderSetting(chatID); err != nil || setting.RemindersPerDay != 2 {
+		t.Fatalf("expected reminders persisted as 2, got %+v (err %v)", setting, err)
 	}
 }
 

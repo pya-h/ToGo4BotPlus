@@ -17,13 +17,13 @@ func seedArticle(t *testing.T, ownerID int64, title, url, category string) uint6
 	return id
 }
 
-func TestArticlebookCommandRendersList(t *testing.T) {
+func TestArticlesCommandRendersList(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	owner := int64(9000)
 	seedArticle(t, owner, "The Go Memory Model", "https://go.dev/ref/mem", "Tech")
 
-	req := startFlowGetSend(t, bot, transport, owner, 800, "/articlebook")
+	req := startFlowGetSend(t, bot, transport, owner, 800, "/articles")
 	text := req.Values.Get("text")
 	if !strings.Contains(text, "Your articles") || !strings.Contains(text, "The Go Memory Model") {
 		t.Fatalf("expected article list, got %q", text)

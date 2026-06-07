@@ -9,7 +9,7 @@ import (
 )
 
 // ============================================================
-// Interactive togo browser (the single rich togo menu, opened with /togobook).
+// Interactive togo browser (the single rich togo menu, opened with /togos).
 //
 // Like the idea/article browsers it is STATELESS: every button encodes the page
 // and (in the detail view) the togo id directly in its callback_data, so it

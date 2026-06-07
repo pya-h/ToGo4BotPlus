@@ -60,13 +60,13 @@ func TestRenderIdeaListNoPaginationWhenSmall(t *testing.T) {
 	}
 }
 
-func TestIdeabookCommandRendersList(t *testing.T) {
+func TestIdeasCommandRendersList(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	owner := int64(8002)
 	seedIdea(t, owner, "Launch a startup", true, "Tech")
 
-	req := startFlowGetSend(t, bot, transport, owner, 700, "/ideabook")
+	req := startFlowGetSend(t, bot, transport, owner, 700, "/ideas")
 	text := req.Values.Get("text")
 	if !strings.Contains(text, "Your ideas") || !strings.Contains(text, "Launch a startup") {
 		t.Fatalf("expected idea list message, got %q", text)

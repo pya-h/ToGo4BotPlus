@@ -307,12 +307,14 @@ func TestMainKeyboardMenuAllDaysTokens(t *testing.T) {
 		t.Fatal("MainKeyboardMenu returned nil")
 	}
 
-	foundPlusA := map[string]bool{"✅": false, "%": false, "❌": false}
-	foundLegacyA := map[string]bool{"✅": false, "%": false, "❌": false}
+	// Togo removal buttons (❌) were moved off the keyboard to slash commands, so
+	// only the tick (✅) and progress (%) rows still carry all-days tokens.
+	foundPlusA := map[string]bool{"✅": false, "%": false}
+	foundLegacyA := map[string]bool{"✅": false, "%": false}
 
 	for _, row := range menu.Keyboard {
 		for _, btn := range row {
-			if strings.HasPrefix(btn.Text, "✅") {
+			if btn.Text == "✅" || strings.HasPrefix(btn.Text, "✅ ") {
 				if strings.Contains(btn.Text, "+a") {
 					foundPlusA["✅"] = true
 				}
@@ -328,14 +330,6 @@ func TestMainKeyboardMenuAllDaysTokens(t *testing.T) {
 					foundLegacyA["%"] = true
 				}
 			}
-			if strings.HasPrefix(btn.Text, "❌") {
-				if strings.Contains(btn.Text, "+a") {
-					foundPlusA["❌"] = true
-				}
-				if strings.Contains(btn.Text, "  a") && !strings.Contains(btn.Text, "+a") {
-					foundLegacyA["❌"] = true
-				}
-			}
 		}
 	}
 
@@ -347,6 +341,47 @@ func TestMainKeyboardMenuAllDaysTokens(t *testing.T) {
 	for key, found := range foundLegacyA {
 		if found {
 			t.Fatalf("found legacy 'a' token without plus sign for %s keyboard row", key)
+		}
+	}
+}
+
+func TestMainKeyboardMenuLayout(t *testing.T) {
+	menu := MainKeyboardMenu()
+	if menu == nil {
+		t.Fatal("MainKeyboardMenu returned nil")
+	}
+
+	rowOf := func(text string) int {
+		for r, row := range menu.Keyboard {
+			for _, btn := range row {
+				if btn.Text == text {
+					return r
+				}
+			}
+		}
+		return -1
+	}
+
+	// Togo removal buttons and the task-reminder setter were moved to slash commands.
+	for _, gone := range []string{"❌", "❌  -a", "❌  +a", "~s  4"} {
+		if rowOf(gone) != -1 {
+			t.Fatalf("expected %q to be removed from the keyboard", gone)
+		}
+	}
+
+	// Tick-togo and progress buttons now share a single row.
+	if r := rowOf("✅"); r == -1 || rowOf("%") != r || rowOf("%  +a") != r {
+		t.Fatalf("expected ✅ and %% buttons merged into one row, got rows ✅=%d %%=%d", rowOf("✅"), rowOf("%"))
+	}
+
+	// All task buttons live on one row together.
+	taskRow := rowOf("~")
+	if taskRow == -1 {
+		t.Fatal("expected a task row starting with ~")
+	}
+	for _, btn := range []string{"~  +i", "%  t", "✅T", "❌T"} {
+		if rowOf(btn) != taskRow {
+			t.Fatalf("expected task button %q on the task row %d, got row %d", btn, taskRow, rowOf(btn))
 		}
 	}
 }

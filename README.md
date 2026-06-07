@@ -46,14 +46,17 @@ The bot offers two complementary ways to drive it:
    (`#️⃣`, `✅`, `%`, `~`, `;`, `*x`, …). Fast for power users.
 2. **Guided wizards & interactive browsers (Type B)** — slash commands that
    drive a single, self-updating message with inline buttons:
-   - `/addIdea`, `/addTogo`, `/addTask`, `/addArticle` — guided, step-by-step
+   - `/addTogo`, `/addTask`, `/addIdea`, `/addArticle` — guided, step-by-step
      creation.
-   - `/togobook`, `/taskbook`, `/ideabook`, `/articlebook` — one interactive,
-     paginated browser per concept. Tap an item to open it, then act on it
-     (remove, toggle done for togos/tasks, heart for ideas, or **Edit** to change
-     its fields), or page Prev/Next through the list. Editing is reached from the
-     browser's ✏️ Edit button — there is no separate "manage" menu.
+   - `/togos`, `/tasks`, `/ideas`, `/articles` — one interactive, paginated
+     browser per concept. Tap an item to open it, then act on it (remove, toggle
+     done for togos/tasks, heart for ideas, or **Edit** to change its fields), or
+     page Prev/Next through the list. Editing is reached from the browser's
+     ✏️ Edit button — there is no separate "manage" menu.
    - `/favorites` — the idea browser scoped to your hearted ideas.
+   - `/removetodaytogos`, `/removealltogos` — open an inline menu to delete togos.
+   - `/taskreminder` — show the task-reminder frequency (`/taskreminder  <n>` sets it).
+   - `/start` — reset any in-progress wizard and show the menu; `/help` — full help.
    - `/cancel` — abort the current wizard.
 
    These commands are also registered with Telegram so they appear in the native
@@ -363,6 +366,9 @@ Show current reminder setting:
 ~s
 ```
 
+The `/taskreminder` slash command does the same: `/taskreminder` shows the
+current setting, `/taskreminder  <n>` sets it.
+
 ### Task Pagination
 
 Task list and reminder messages are automatically paginated when too long.
@@ -424,9 +430,9 @@ wizard (and idea editing) your previously used categories appear as inline
 suggestion buttons, ordered by how often you've used them, alongside a
 `✏️ Custom` option to type a new one.
 
-### Interactive idea browser (`/ideabook`, `/favorites`)
+### Interactive idea browser (`/ideas`, `/favorites`)
 
-`/ideabook` opens a self-updating, paginated browser:
+`/ideas` opens a self-updating, paginated browser:
 
 - The message lists `#id [🔴/⚪] Category: header` for each idea on the page, with
   an inline button (`#id: header`) per idea. When you have more than 10 ideas a
@@ -440,9 +446,9 @@ suggestion buttons, ordered by how often you've used them, alongside a
 
 `/favorites` is the same browser scoped to ideas you've hearted.
 
-The same browser exists for every concept: **`/togobook`** and **`/taskbook`**
+The same browser exists for every concept: **`/togos`** and **`/tasks`**
 (30 items per page, with a **toggle done** action in the detail view) and
-**`/articlebook`** (10 per page). There is no separate "manage" command — each
+**`/articles`** (10 per page). There is no separate "manage" command — each
 browser's ✏️ Edit button is the single entry point to editing an item's fields.
 
 ### Favorite-idea reminders
@@ -463,10 +469,10 @@ processed.
 | `;` | `c  <category>` | List ideas by category |
 | `;u` | `id` | Get/update an idea by id |
 | `*x` | (default) | Remove ideas via inline keyboard |
-| `/ideabook` | — | Interactive idea browser (paginated, heart/edit/remove) |
+| `/ideas` | — | Interactive idea browser (paginated, heart/edit/remove) |
 | `/favorites` | — | Interactive browser of favorite ideas |
-| `/togobook` | — | Interactive togo browser (paginated, toggle/edit/remove) |
-| `/taskbook` | — | Interactive task browser (paginated, toggle/edit/remove) |
+| `/togos` | — | Interactive togo browser (paginated, toggle/edit/remove) |
+| `/tasks` | — | Interactive task browser (paginated, toggle/edit/remove) |
 
 ## Articles (saved links)
 
@@ -495,12 +501,12 @@ List / filter:
 | `>l` | `c  <category>` | List articles by category |
 | `>u` | `id` | Get/update an article by id (`+t` title, `+u` url, `+c` category) |
 | `>x` | (default) | Remove articles via inline keyboard |
-| `/articlebook` | — | Interactive article browser (paginated, edit/remove) |
+| `/articles` | — | Interactive article browser (paginated, edit/remove) |
 
 ### Guided & interactive (Type B)
 
 - `/addArticle` — guided wizard: title → url → category → confirm.
-- `/articlebook` — the same stateless, paginated browser as `/ideabook`: a list
+- `/articles` — the same stateless, paginated browser as `/ideas`: a list
   of `#id Category: title` with one button per article; tap one to see its full
   detail (title, category, url) with **🗑 Remove / ✏️ Edit** and
   **⬅️ Prev / 🔙 Menu / Next ➡️**.

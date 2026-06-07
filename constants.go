@@ -223,15 +223,33 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 	Remove articles using inline keyboard.
 
 ## Guided menus (step by step):
-*   /addidea, /addtogo, /addtask, /addarticle open a guided wizard with inline buttons.
+*   /addtogo, /addtask, /addidea, /addarticle open a guided wizard with inline buttons.
 *   /cancel aborts the current guided menu.
 
 ## Interactive browsers (one rich menu per concept):
-*   /togobook, /taskbook, /ideabook, /articlebook open a paginated browser. Tap an
-    item to open it, then act on it (Remove / Toggle done / Edit, plus Heart for
-    ideas) or step Prev/Next through the list. Tapping Edit opens the field editor.
+*   /togos, /tasks, /ideas, /articles open a paginated browser. Tap an item to
+    open it, then act on it (Remove / Toggle done / Edit, plus Heart for ideas)
+    or step Prev/Next through the list. Tapping Edit opens the field editor.
 *   /favorites opens the idea browser limited to your hearted ideas.
 *   Heart an idea to make it a favorite; the bot periodically reminds you of a
     few random favorites so good ideas do not get forgotten.
 *   Once a day the bot sends you one of your saved articles at random, with its
-    link preview.` + "\n```"
+    link preview.
+
+## Handy slash commands:
+*   /removetodaytogos, /removealltogos open an inline menu to delete togos.
+*   /taskreminder shows the task-reminder frequency; /taskreminder  <n> sets it
+    (allowed: 0/1/2/4/6/8/12/24, 0 disables).
+*   /start restarts the bot and shows the menu; /help shows this help.` + "\n```"
+
+// WELCOME_MESSAGE is shown on /start, after any in-progress guided menu is reset.
+const WELCOME_MESSAGE = "👋 Welcome to ToGo4Bot+!\n\n" +
+	"I help you track togos, tasks, ideas and saved articles.\n\n" +
+	"• Use the keyboard below for quick actions.\n" +
+	"• /addtogo, /addtask, /addidea, /addarticle — add something (guided).\n" +
+	"• /togos, /tasks, /ideas, /articles — browse and manage.\n" +
+	"• /help — the full command reference.\n\n" +
+	"What would you like to do?"
+
+// UNKNOWN_COMMAND_MESSAGE is returned when a message matches no known command.
+const UNKNOWN_COMMAND_MESSAGE = "❓ I didn't understand that.\n\nTap /help to see everything I can do, or use the menu below."

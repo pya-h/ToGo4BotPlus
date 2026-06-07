@@ -192,7 +192,7 @@ func TestParseFlowCommand(t *testing.T) {
 		{"/cancel", "cancel", true},
 		{"/now", "", false},
 		{"/db", "", false},
-		{"/ideabook", "", false}, // browsers are stateless, not guided flows
+		{"/ideas", "", false}, // browsers are stateless, not guided flows
 		{"plain text", "", false},
 		{"*  an idea", "", false},
 	}
@@ -407,7 +407,7 @@ func TestBrowseEmptyList(t *testing.T) {
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9303)
 
-	list := startFlowGetSend(t, bot, transport, chatID, 1330, "/togobook")
+	list := startFlowGetSend(t, bot, transport, chatID, 1330, "/togos")
 	if !strings.Contains(list.Values.Get("text"), "Nothing here yet") {
 		t.Fatalf("expected empty browser message, got %q", list.Values.Get("text"))
 	}
@@ -421,7 +421,7 @@ func TestRegisterBotCommands(t *testing.T) {
 		t.Fatal("expected a setMyCommands request")
 	}
 	cmds := req.Values.Get("commands")
-	for _, want := range []string{"addidea", "addtogo", "addtask", "togobook", "taskbook", "ideabook", "articlebook", "cancel"} {
+	for _, want := range []string{"start", "help", "addidea", "addtogo", "addtask", "togos", "tasks", "ideas", "articles", "removetodaytogos", "removealltogos", "taskreminder", "cancel"} {
 		if !strings.Contains(cmds, want) {
 			t.Fatalf("expected %q in registered commands payload %q", want, cmds)
 		}

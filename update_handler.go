@@ -28,7 +28,19 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 	if update.Message != nil {
 		chatID := update.Message.Chat.ID
 
-		// 1) A guided-flow slash command (/addIdea, /ideas, /cancel, ...) takes priority.
+		// 0) /start always resets the user — even mid guided-flow — and shows the
+		// menu, so a stuck conversation can always be escaped.
+		if normalizeSlashCommand(update.Message.Text) == "/start" {
+			telegramBot.flows.Clear(chatID)
+			telegramBot.SendTextMessage(TelegramResponse{
+				TargetChatId:     chatID,
+				MessageRepliedTo: update.Message.MessageID,
+				TextMsg:          WELCOME_MESSAGE,
+				ReplyMarkup:      MainKeyboardMenu(),
+			})
+			return
+		}
+		// 1) A guided-flow slash command (/addIdea, /cancel, ...) takes priority.
 		if cmd, arg, ok := parseFlowCommand(update.Message.Text); ok {
 			telegramBot.handleFlowCommand(chatID, cmd, arg)
 			return
@@ -65,10 +77,29 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 	}
 }
 
+// normalizeSlashCommand lowercases a leading slash command and strips any
+// "@BotName" suffix, returning "" when the text is not a slash command.
+func normalizeSlashCommand(text string) string {
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "/") {
+		return ""
+	}
+	fields := strings.Fields(text)
+	cmd := strings.ToLower(fields[0])
+	if at := strings.IndexByte(cmd, '@'); at >= 0 {
+		cmd = cmd[:at]
+	}
+	return cmd
+}
+
 func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message, response *TelegramResponse) {
 	response.ReplyMarkup = MainKeyboardMenu()
 	response.TargetChatId = message.Chat.ID
 	response.MessageRepliedTo = message.MessageID
+	// Default to an "unknown command" notice; every recognized command below
+	// overwrites response.TextMsg, so anything that matches nothing falls through
+	// to this message instead of silently doing nothing.
+	response.TextMsg = UNKNOWN_COMMAND_MESSAGE
 	terms := SplitArguments(message.Text)
 	numOfTerms := len(terms)
 
@@ -330,7 +361,7 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			} else {
 				response.TextMsg = "Could not load tasks for removing."
 			}
-		case TaskSettingsCommand:
+		case TaskSettingsCommand, "/taskreminder":
 			if i+1 < numOfTerms {
 				if times, err := strconv.Atoi(terms[i+1]); err == nil {
 					if err := Task.SetReminderTimes(message.Chat.ID, times); err == nil {
@@ -363,10 +394,11 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			}
 		case "/now":
 			response.TextMsg = now.Get()
-		// The plural-noun commands (`/ideas`, `/togos`, ...) are kept as friendly
-		// aliases of the `*book` browsers — there is no longer a separate manage
-		// menu, so every one of these opens the single rich browser.
-		case "/ideabook", "/ideas", "/favorites":
+		case "/help":
+			response.TextMsg = HELP_MESSAGE
+		// Each concept has a single rich browser, opened with the plural-noun
+		// command (`/togos`, `/tasks`, `/ideas`, `/articles`).
+		case "/ideas", "/favorites":
 			scope := ideaScopeAll
 			if terms[i] == "/favorites" {
 				scope = ideaScopeFav
@@ -375,21 +407,42 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			text, kb := renderIdeaList(ideas, scope, 0, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
-		case "/articlebook", "/articles":
+		case "/articles":
 			articles, warning := loadArticlesForScope(message.Chat.ID, 0)
 			text, kb := renderArticleList(articles, 0, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
-		case "/togobook", "/togos":
+		case "/togos":
 			togos, warning := loadTogosForBrowse(message.Chat.ID)
 			text, kb := renderTogoList(togos, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
-		case "/taskbook", "/tasks":
+		case "/tasks":
 			tasks, warning := loadTasksForBrowse(message.Chat.ID)
 			text, kb := renderTaskList(tasks, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
+		case "/removetodaytogos", "/removealltogos":
+			allDays := terms[i] == "/removealltogos"
+			togos, err := Togo.Load(message.Chat.ID, !allDays, false)
+			if togos == nil {
+				if err != nil {
+					response.TextMsg = err.Error()
+				} else {
+					response.TextMsg = "Could not load togos for removal."
+				}
+				break
+			}
+			if len(togos) >= 1 {
+				if allDays {
+					response.TextMsg = "Here are your togos from any day — pick one to remove:"
+				} else {
+					response.TextMsg = "Here are your Today's togos — pick one to remove:"
+				}
+				response.InlineKeyboard = InlineKeyboardMenu(togos, RemoveTogo, allDays, false, 0)
+			} else {
+				response.TextMsg = "No togos so far..."
+			}
 		case ArticleAddCommand:
 			if i+1 < numOfTerms {
 				if article, err := Article.Extract(message.Chat.ID, terms[i+1:]); err == nil {

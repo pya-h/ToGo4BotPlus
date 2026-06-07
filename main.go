@@ -108,15 +108,20 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		Description string `json:"description"`
 	}
 	commands := []botCommand{
-		{"addidea", "Add an idea (guided)"},
+		{"start", "Restart the bot and show the menu"},
+		{"help", "Show the full command help"},
 		{"addtogo", "Add a togo (guided)"},
 		{"addtask", "Add a task (guided)"},
+		{"addidea", "Add an idea (guided)"},
 		{"addarticle", "Save an article link (guided)"},
-		{"ideabook", "Browse your ideas (interactive)"},
+		{"togos", "Browse your togos (interactive)"},
+		{"tasks", "Browse your tasks (interactive)"},
+		{"ideas", "Browse your ideas (interactive)"},
+		{"articles", "Browse your articles (interactive)"},
 		{"favorites", "Browse your favorite ideas"},
-		{"togobook", "Browse your togos (interactive)"},
-		{"taskbook", "Browse your tasks (interactive)"},
-		{"articlebook", "Browse your articles (interactive)"},
+		{"removetodaytogos", "Remove today's togos (interactive)"},
+		{"removealltogos", "Remove togos from any day (interactive)"},
+		{"taskreminder", "Show/Set task reminder frequency"},
 		{"cancel", "Cancel the current guided menu"},
 		{"now", "Show current date/time"},
 	}
@@ -352,14 +357,15 @@ func InlineKeyboardMenu(togos Togo.TogoList, action UserAction, allDays bool, ju
 func MainKeyboardMenu() *tgbotapi.ReplyKeyboardMarkup {
 	return &tgbotapi.ReplyKeyboardMarkup{ResizeKeyboard: true,
 		OneTimeKeyboard: false,
-		Keyboard: [][]tgbotapi.KeyboardButton{{tgbotapi.KeyboardButton{Text: "#️⃣"}, tgbotapi.KeyboardButton{Text: "#️⃣  -"}, tgbotapi.KeyboardButton{Text: "#️⃣  +a"}, tgbotapi.KeyboardButton{Text: "#️⃣  -a"}},
-			{tgbotapi.KeyboardButton{Text: "✅"}, tgbotapi.KeyboardButton{Text: "✅  -a"}, tgbotapi.KeyboardButton{Text: "✅  +a"}},
-			{tgbotapi.KeyboardButton{Text: "%"}, tgbotapi.KeyboardButton{Text: "%  +a"}},
-			{tgbotapi.KeyboardButton{Text: "❌"}, tgbotapi.KeyboardButton{Text: "❌  -a"}, tgbotapi.KeyboardButton{Text: "❌  +a"}},
-			{tgbotapi.KeyboardButton{Text: "~"}, tgbotapi.KeyboardButton{Text: "~  +i"}, tgbotapi.KeyboardButton{Text: "%  t"}},
-			{tgbotapi.KeyboardButton{Text: "✅T"}, tgbotapi.KeyboardButton{Text: "❌T"}, tgbotapi.KeyboardButton{Text: "~s  4"}},
-			{tgbotapi.KeyboardButton{Text: ";"}, tgbotapi.KeyboardButton{Text: ";  !"}, tgbotapi.KeyboardButton{Text: "*x"}},
-			{tgbotapi.KeyboardButton{Text: ">l"}, tgbotapi.KeyboardButton{Text: ">x"}},
+		// Row 1: show togos. Row 2: tick togos + togo progress (merged). Row 3:
+		// every task action on one line. Row 4: ideas. Row 5: articles. Togo
+		// removal and task-reminder setting moved to slash commands.
+		Keyboard: [][]tgbotapi.KeyboardButton{
+			{{Text: "#️⃣"}, {Text: "#️⃣  -"}, {Text: "#️⃣  +a"}, {Text: "#️⃣  -a"}},
+			{{Text: "✅"}, {Text: "✅  -a"}, {Text: "✅  +a"}, {Text: "%"}, {Text: "%  +a"}},
+			{{Text: "~"}, {Text: "~  +i"}, {Text: "%  t"}, {Text: "✅T"}, {Text: "❌T"}},
+			{{Text: ";"}, {Text: ";  !"}, {Text: "*x"}},
+			{{Text: ">l"}, {Text: ">x"}},
 		}}
 }
 

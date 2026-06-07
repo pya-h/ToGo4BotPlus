@@ -7,32 +7,19 @@ import (
 	"ToGo4BotPlus/Togo"
 )
 
-func TestTogobookCommandRendersList(t *testing.T) {
+func TestTogosCommandRendersList(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	owner := int64(9700)
 	seedTogo(t, owner, "Write the report", 0)
 
-	req := startFlowGetSend(t, bot, transport, owner, 900, "/togobook")
+	req := startFlowGetSend(t, bot, transport, owner, 900, "/togos")
 	text := req.Values.Get("text")
 	if !strings.Contains(text, "Your togos") || !strings.Contains(text, "Write the report") {
 		t.Fatalf("expected togo list message, got %q", text)
 	}
 	if req.Values.Get("reply_markup") == "" {
 		t.Fatalf("expected an inline keyboard on the togo list")
-	}
-}
-
-func TestTogosAliasOpensBrowser(t *testing.T) {
-	withTempWorkingDir(t, true)
-	bot, transport := newRecordingBot(t)
-	owner := int64(9710)
-	seedTogo(t, owner, "via alias", 0)
-
-	// The old `/togos` command now opens the browser instead of a manage menu.
-	req := startFlowGetSend(t, bot, transport, owner, 905, "/togos")
-	if !strings.Contains(req.Values.Get("text"), "Your togos") || !strings.Contains(req.Values.Get("text"), "via alias") {
-		t.Fatalf("expected /togos to open the browser, got %q", req.Values.Get("text"))
 	}
 }
 

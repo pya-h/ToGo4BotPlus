@@ -7,13 +7,13 @@ import (
 	"ToGo4BotPlus/Task"
 )
 
-func TestTaskbookCommandRendersList(t *testing.T) {
+func TestTasksCommandRendersList(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	owner := int64(9800)
 	seedTask(t, owner, "Ship the feature", 0)
 
-	req := startFlowGetSend(t, bot, transport, owner, 1000, "/taskbook")
+	req := startFlowGetSend(t, bot, transport, owner, 1000, "/tasks")
 	text := req.Values.Get("text")
 	if !strings.Contains(text, "Your tasks") || !strings.Contains(text, "Ship the feature") {
 		t.Fatalf("expected task list message, got %q", text)

@@ -10,7 +10,7 @@ import (
 )
 
 // ============================================================
-// Interactive task browser (the single rich task menu, opened with /taskbook).
+// Interactive task browser (the single rich task menu, opened with /tasks).
 //
 // Mirrors the togo browser: stateless, with a Toggle in the detail view since
 // tasks have a done state. Editing hands the message off to the shared edit
