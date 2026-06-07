@@ -44,13 +44,16 @@ The bot offers two complementary ways to drive it:
    ([`MainKeyboardMenu`](main.go)) shown under the text box. Its buttons send the
    one-shot command tokens for listing togos/tasks/ideas and showing stats
    (`#️⃣`, `✅`, `%`, `~`, `;`, `*x`, …). Fast for power users.
-2. **Guided wizards (Type B)** — slash commands that start a *step-by-step*
-   conversation, editing a single message as you go and offering inline buttons
-   for option selection:
-   - `/addIdea`, `/addTogo`, `/addTask`, `/addArticle` — guided creation.
-   - `/ideas`, `/togos`, `/tasks`, `/articles` — manage menu: pick an item, then
-     edit fields, toggle done (togos/tasks), or delete it.
-   - `/ideabook`, `/favorites`, `/articlebook` — interactive paginated browsers.
+2. **Guided wizards & interactive browsers (Type B)** — slash commands that
+   drive a single, self-updating message with inline buttons:
+   - `/addIdea`, `/addTogo`, `/addTask`, `/addArticle` — guided, step-by-step
+     creation.
+   - `/togobook`, `/taskbook`, `/ideabook`, `/articlebook` — one interactive,
+     paginated browser per concept. Tap an item to open it, then act on it
+     (remove, toggle done for togos/tasks, heart for ideas, or **Edit** to change
+     its fields), or page Prev/Next through the list. Editing is reached from the
+     browser's ✏️ Edit button — there is no separate "manage" menu.
+   - `/favorites` — the idea browser scoped to your hearted ideas.
    - `/cancel` — abort the current wizard.
 
    These commands are also registered with Telegram so they appear in the native
@@ -428,12 +431,19 @@ suggestion buttons, ordered by how often you've used them, alongside a
 - The message lists `#id [🔴/⚪] Category: header` for each idea on the page, with
   an inline button (`#id: header`) per idea. When you have more than 10 ideas a
   `⬅️ Prev / page / Next ➡️` row appears.
+- Item buttons are packed several per row (up to `MaximumNumberOfRowItems`) so the
+  list fills the message width rather than stacking one per row.
 - Tapping an idea shows its full detail in the same message, with
   **🗑 Remove / ❤️ Heart / ✏️ Edit** and a **⬅️ Prev / 🔙 Menu / Next ➡️** row to
   step through ideas or return to the list. Edit hands the message off to the
-  manage-flow edit screens.
+  field-edit screens.
 
 `/favorites` is the same browser scoped to ideas you've hearted.
+
+The same browser exists for every concept: **`/togobook`** and **`/taskbook`**
+(30 items per page, with a **toggle done** action in the detail view) and
+**`/articlebook`** (10 per page). There is no separate "manage" command — each
+browser's ✏️ Edit button is the single entry point to editing an item's fields.
 
 ### Favorite-idea reminders
 
@@ -455,6 +465,8 @@ processed.
 | `*x` | (default) | Remove ideas via inline keyboard |
 | `/ideabook` | — | Interactive idea browser (paginated, heart/edit/remove) |
 | `/favorites` | — | Interactive browser of favorite ideas |
+| `/togobook` | — | Interactive togo browser (paginated, toggle/edit/remove) |
+| `/taskbook` | — | Interactive task browser (paginated, toggle/edit/remove) |
 
 ## Articles (saved links)
 
@@ -488,8 +500,6 @@ List / filter:
 ### Guided & interactive (Type B)
 
 - `/addArticle` — guided wizard: title → url → category → confirm.
-- `/articles` — manage menu: pick an article, then edit (title / url / category)
-  or delete it.
 - `/articlebook` — the same stateless, paginated browser as `/ideabook`: a list
   of `#id Category: title` with one button per article; tap one to see its full
   detail (title, category, url) with **🗑 Remove / ✏️ Edit** and

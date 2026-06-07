@@ -29,14 +29,6 @@ const (
 	manageScreenConfirm  = "confirmdelete"
 )
 
-// manageFlowEntity maps a manage flow name to its entity key.
-var manageFlowEntity = map[string]string{
-	"manageIdea":    "idea",
-	"manageTogo":    "togo",
-	"manageTask":    "task",
-	"manageArticle": "article",
-}
-
 type manageItem struct {
 	ID    uint64
 	Label string
@@ -78,18 +70,28 @@ func manageEntityFor(entity string) ManageEntity {
 
 // ---------------------- Lifecycle & routing -----------------------------------
 
-func (telegramBot *TelegramBotAPI) startManageFlow(chatID int64, entity string) {
+// enterEditFromMenu turns an interactive browser message into the edit card for
+// the selected item, registering flow state so subsequent (typed or tapped)
+// edits route through the shared edit engine. This is the only entry point into
+// the edit screens now that the standalone "manage" commands are gone — every
+// rich menu is a browser whose ✏️ Edit button lands here.
+func (telegramBot *TelegramBotAPI) enterEditFromMenu(owner int64, entity string, id uint64, response *TelegramResponse) {
 	ent := manageEntityFor(entity)
 	if ent == nil {
-		telegramBot.SendTextMessage(TelegramResponse{TargetChatId: chatID, TextMsg: "Unknown guided command.", ReplyMarkup: MainKeyboardMenu()})
+		response.TextMsg = "Could not open the editor."
 		return
 	}
-	state := &FlowState{Entity: entity, Screen: manageScreenList, Data: make(map[string]string)}
-	text, kb := telegramBot.buildManageList(chatID, state, ent)
-	if id, err := telegramBot.SendTextMessageReturningID(TelegramResponse{TargetChatId: chatID, TextMsg: text, InlineKeyboard: kb}); err == nil {
-		state.MessageID = id
+	state := &FlowState{
+		Entity:    entity,
+		Screen:    manageScreenCard,
+		ItemID:    id,
+		Data:      make(map[string]string),
+		MessageID: response.MessageBeingEditedId,
 	}
-	telegramBot.flows.Set(chatID, state)
+	text, kb := telegramBot.buildManageCard(owner, state, ent, "✏️ Editing — pick a field or delete.")
+	telegramBot.flows.Set(owner, state)
+	response.TextMsg = text
+	response.InlineKeyboard = kb
 }
 
 func (telegramBot *TelegramBotAPI) renderManage(chatID int64, state *FlowState, text string, kb *tgbotapi.InlineKeyboardMarkup) {
@@ -275,7 +277,7 @@ func (telegramBot *TelegramBotAPI) buildManageList(chatID int64, state *FlowStat
 		return fmt.Sprintf("⚠️ Could not load %ss: %s", ent.Label(), err.Error()), cancelOnlyKeyboard()
 	}
 	if len(items) == 0 {
-		return fmt.Sprintf("You have no %ss to manage.", ent.Label()), cancelOnlyKeyboard()
+		return fmt.Sprintf("You have no %ss yet.", ent.Label()), cancelOnlyKeyboard()
 	}
 
 	truncated := false
@@ -289,7 +291,7 @@ func (telegramBot *TelegramBotAPI) buildManageList(chatID int64, state *FlowStat
 	}
 	state.Options = opts
 
-	text := fmt.Sprintf("📂 Manage your %ss — pick one:", ent.Label())
+	text := fmt.Sprintf("✏️ Pick one to edit (%s):", ent.Label())
 	if truncated {
 		text += fmt.Sprintf("\n\n(Showing the first %d; refine via commands for the rest.)", MaximumInlineMenuItems)
 	}

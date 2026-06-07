@@ -111,13 +111,11 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		{"addidea", "Add an idea (guided)"},
 		{"addtogo", "Add a togo (guided)"},
 		{"addtask", "Add a task (guided)"},
-		{"ideas", "Manage your ideas"},
-		{"togos", "Manage your togos"},
-		{"tasks", "Manage your tasks"},
+		{"addarticle", "Save an article link (guided)"},
 		{"ideabook", "Browse your ideas (interactive)"},
 		{"favorites", "Browse your favorite ideas"},
-		{"addarticle", "Save an article link (guided)"},
-		{"articles", "Manage your articles"},
+		{"togobook", "Browse your togos (interactive)"},
+		{"taskbook", "Browse your tasks (interactive)"},
 		{"articlebook", "Browse your articles (interactive)"},
 		{"cancel", "Cancel the current guided menu"},
 		{"now", "Show current date/time"},
@@ -169,6 +167,16 @@ const (
 	ArticleMenuOpen   // open one article's detail card in the browser
 	ArticleMenuRemove // delete an article from the browser, return to the list
 	ArticleMenuEdit   // hand the browser message off to the manage-flow edit screens
+	TogoMenuList      // render a page of the interactive togo browser
+	TogoMenuOpen      // open one togo's detail card in the browser
+	TogoMenuRemove    // delete a togo from the browser, return to the list
+	TogoMenuToggle    // toggle a togo's done state from the browser
+	TogoMenuEdit      // hand the togo-browser message off to the edit screens
+	TaskMenuList      // render a page of the interactive task browser
+	TaskMenuOpen      // open one task's detail card in the browser
+	TaskMenuRemove    // delete a task from the browser, return to the list
+	TaskMenuToggle    // toggle a task's done state from the browser
+	TaskMenuEdit      // hand the task-browser message off to the edit screens
 )
 
 type CallbackData struct {
@@ -221,6 +229,24 @@ func truncateUTF8(s string, maxBytes int) string {
 	}
 
 	return ""
+}
+
+// packButtonsIntoRows lays a flat list of inline buttons out into rows of at
+// most perRow buttons each, so a browser's item buttons fill the message width
+// instead of stacking one-per-row.
+func packButtonsIntoRows(buttons []tgbotapi.InlineKeyboardButton, perRow int) [][]tgbotapi.InlineKeyboardButton {
+	if perRow < 1 {
+		perRow = 1
+	}
+	rows := make([][]tgbotapi.InlineKeyboardButton, 0, (len(buttons)+perRow-1)/perRow)
+	for start := 0; start < len(buttons); start += perRow {
+		end := start + perRow
+		if end > len(buttons) {
+			end = len(buttons)
+		}
+		rows = append(rows, buttons[start:end])
+	}
+	return rows
 }
 
 // menuPageCount returns how many pages of inline buttons are needed for count

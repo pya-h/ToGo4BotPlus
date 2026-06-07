@@ -326,6 +326,17 @@ func (tasks TaskList) Get(taskID uint64) (*Task, error) {
 	return nil, errors.New("can not find this task")
 }
 
+// Index returns the position of the task with the given id, or -1 if absent.
+// It is used by the interactive browser to locate an item within its page.
+func (tasks TaskList) Index(taskID uint64) int {
+	for i := range tasks {
+		if tasks[i].Id == taskID {
+			return i
+		}
+	}
+	return -1
+}
+
 func InitDatabase() error {
 	db, err := sql.Open("sqlite3", DATABASE_NAME)
 	if err != nil {

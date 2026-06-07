@@ -304,6 +304,17 @@ func (togos TogoList) Get(togoID uint64) (*Togo, error) {
 	return nil, errors.New("‼️can not find this togo")
 }
 
+// Index returns the position of the togo with the given id, or -1 if absent.
+// It is used by the interactive browser to locate an item within its page.
+func (togos TogoList) Index(togoID uint64) int {
+	for i := range togos {
+		if togos[i].Id == togoID {
+			return i
+		}
+	}
+	return -1
+}
+
 // ---------------------- Shared Functions --------------------------------
 
 // InitDatabase creates the togos table if it doesn't exist

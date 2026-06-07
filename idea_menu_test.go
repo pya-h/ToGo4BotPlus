@@ -32,18 +32,19 @@ func TestRenderIdeaListPaginatesAbovePageSize(t *testing.T) {
 	if kb == nil {
 		t.Fatal("expected a keyboard for a non-empty list")
 	}
-	// 10 idea rows + 1 nav row.
-	if len(kb.InlineKeyboard) != IdeasPerMenuPage+1 {
-		t.Fatalf("expected %d rows on page 0, got %d", IdeasPerMenuPage+1, len(kb.InlineKeyboard))
+	// 10 ideas packed MaximumNumberOfRowItems per row + 1 nav row.
+	wantPage0 := (IdeasPerMenuPage+MaximumNumberOfRowItems-1)/MaximumNumberOfRowItems + 1
+	if len(kb.InlineKeyboard) != wantPage0 {
+		t.Fatalf("expected %d rows on page 0, got %d", wantPage0, len(kb.InlineKeyboard))
 	}
 	if !strings.Contains(kbText(kb), "1/2") {
 		t.Fatalf("expected a 1/2 page indicator, keyboard labels were %q", kbText(kb))
 	}
 
-	// Page 1 holds the remaining 2 ideas + nav.
+	// Page 1 holds the remaining 2 ideas (one packed row) + nav.
 	_, kb2 := renderIdeaList(ideas, ideaScopeAll, 0, 1)
-	if len(kb2.InlineKeyboard) != 2+1 {
-		t.Fatalf("expected 3 rows on page 1 (2 ideas + nav), got %d", len(kb2.InlineKeyboard))
+	if len(kb2.InlineKeyboard) != 1+1 {
+		t.Fatalf("expected 2 rows on page 1 (2 ideas packed + nav), got %d", len(kb2.InlineKeyboard))
 	}
 }
 

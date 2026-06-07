@@ -115,10 +115,6 @@ var flowCommandToFlowName = map[string]string{
 	"addtogo":    "addTogo",
 	"addtask":    "addTask",
 	"addarticle": "addArticle",
-	"ideas":      "manageIdea",
-	"togos":      "manageTogo",
-	"tasks":      "manageTask",
-	"articles":   "manageArticle",
 }
 
 // parseFlowCommand detects a e-flow slash command (or /cancel). It returns
@@ -160,12 +156,7 @@ func (telegramBot *TelegramBotAPI) handleFlowCommand(chatID int64, cmd string, a
 		telegramBot.cancelActiveFlow(chatID)
 		return
 	}
-	flowName := flowCommandToFlowName[cmd]
-	if entity, ok := manageFlowEntity[flowName]; ok {
-		telegramBot.startManageFlow(chatID, entity)
-		return
-	}
-	telegramBot.startFlow(chatID, flowName, arg)
+	telegramBot.startFlow(chatID, flowCommandToFlowName[cmd], arg)
 }
 
 func (telegramBot *TelegramBotAPI) startFlow(chatID int64, flowName string, arg string) {

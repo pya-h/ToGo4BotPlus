@@ -224,16 +224,14 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 
 ## Guided menus (step by step):
 *   /addidea, /addtogo, /addtask, /addarticle open a guided wizard with inline buttons.
-*   /ideas, /togos, /tasks, /articles open a manage menu to edit or delete items.
 *   /cancel aborts the current guided menu.
 
-## Idea & article browsers:
-*   /ideabook opens an interactive, paginated idea browser. Tap an idea to view
-    it, then Remove / Heart (favorite) / Edit, or step Prev/Next through the list.
-*   /favorites opens the same browser limited to your hearted ideas.
+## Interactive browsers (one rich menu per concept):
+*   /togobook, /taskbook, /ideabook, /articlebook open a paginated browser. Tap an
+    item to open it, then act on it (Remove / Toggle done / Edit, plus Heart for
+    ideas) or step Prev/Next through the list. Tapping Edit opens the field editor.
+*   /favorites opens the idea browser limited to your hearted ideas.
 *   Heart an idea to make it a favorite; the bot periodically reminds you of a
     few random favorites so good ideas do not get forgotten.
-*   /articlebook opens the same kind of browser for your saved articles
-    (Remove / Edit / Prev / Next).
 *   Once a day the bot sends you one of your saved articles at random, with its
     link preview.` + "\n```"

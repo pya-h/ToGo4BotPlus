@@ -42,14 +42,15 @@ func TestRenderArticleListPaginates(t *testing.T) {
 	articles, _ := Article.Load(owner, 0)
 
 	_, kb := renderArticleList(articles, 0, 0)
-	if len(kb.InlineKeyboard) != ArticlesPerMenuPage+1 {
-		t.Fatalf("expected %d rows on page 0, got %d", ArticlesPerMenuPage+1, len(kb.InlineKeyboard))
+	wantPage0 := (ArticlesPerMenuPage+MaximumNumberOfRowItems-1)/MaximumNumberOfRowItems + 1
+	if len(kb.InlineKeyboard) != wantPage0 {
+		t.Fatalf("expected %d rows on page 0, got %d", wantPage0, len(kb.InlineKeyboard))
 	}
 	if !strings.Contains(kbText(kb), "1/2") {
 		t.Fatalf("expected a 1/2 indicator, got %q", kbText(kb))
 	}
-	if _, kb1 := renderArticleList(articles, 0, 1); len(kb1.InlineKeyboard) != 2+1 {
-		t.Fatalf("expected 3 rows on page 1, got %d", len(kb1.InlineKeyboard))
+	if _, kb1 := renderArticleList(articles, 0, 1); len(kb1.InlineKeyboard) != 1+1 {
+		t.Fatalf("expected 2 rows on page 1 (2 articles packed + nav), got %d", len(kb1.InlineKeyboard))
 	}
 }
 

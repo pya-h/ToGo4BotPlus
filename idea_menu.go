@@ -86,16 +86,16 @@ func ideaListLine(idea Idea.Idea) string {
 // ideaButtonRows builds one inline button per idea ("#id: header"), each opening
 // that idea's detail view within the given scope.
 func ideaButtonRows(ideas Idea.IdeaList, scope int, categoryID int64) [][]tgbotapi.InlineKeyboardButton {
-	rows := make([][]tgbotapi.InlineKeyboardButton, 0, len(ideas))
+	buttons := make([]tgbotapi.InlineKeyboardButton, 0, len(ideas))
 	for i := range ideas {
 		label := fmt.Sprintf("#%d: %s", ideas[i].Id, ideas[i].Header())
 		if len(label) >= MaximumInlineButtonTextLength {
 			label = fmt.Sprintf("%s...", truncateUTF8(label, MaximumInlineButtonTextLength-3))
 		}
 		data := (CallbackData{Action: IdeaMenuOpen, ID: int64(ideas[i].Id), IdeaScope: scope, IdeaCat: categoryID}).Json()
-		rows = append(rows, []tgbotapi.InlineKeyboardButton{{Text: label, CallbackData: &data}})
+		buttons = append(buttons, tgbotapi.InlineKeyboardButton{Text: label, CallbackData: &data})
 	}
-	return rows
+	return packButtonsIntoRows(buttons, MaximumNumberOfRowItems)
 }
 
 // renderIdeaList builds the list view (message text + paginated inline menu).
@@ -278,26 +278,11 @@ func orEmptyKeyboard(kb *tgbotapi.InlineKeyboardMarkup) *tgbotapi.InlineKeyboard
 	return kb
 }
 
-// enterIdeaEditFromMenu turns the current browser message into the manage-flow
-// edit card for the selected idea, registering flow state so subsequent (typed
-// or tapped) edits route through the existing manage engine.
+// enterIdeaEditFromMenu turns the current browser message into the edit card for
+// the selected idea (so subsequent typed/tapped edits route through the shared
+// edit engine).
 func (telegramBot *TelegramBotAPI) enterIdeaEditFromMenu(owner int64, cb CallbackData, response *TelegramResponse) {
-	ent := manageEntityFor("idea")
-	if ent == nil {
-		response.TextMsg = "Could not open the idea editor."
-		return
-	}
-	state := &FlowState{
-		Entity:    "idea",
-		Screen:    manageScreenCard,
-		ItemID:    uint64(cb.ID),
-		Data:      make(map[string]string),
-		MessageID: response.MessageBeingEditedId,
-	}
-	text, kb := telegramBot.buildManageCard(owner, state, ent, "✏️ Editing — pick a field or delete.")
-	telegramBot.flows.Set(owner, state)
-	response.TextMsg = text
-	response.InlineKeyboard = kb
+	telegramBot.enterEditFromMenu(owner, "idea", uint64(cb.ID), response)
 }
 
 func appendWarning(text string, warning error) string {

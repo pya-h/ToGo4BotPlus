@@ -188,10 +188,11 @@ func TestParseFlowCommand(t *testing.T) {
 	}{
 		{"/addIdea", "addidea", true},
 		{"/addidea@MyBot", "addidea", true},
-		{"/ideas  5", "ideas", true},
+		{"/addtask  5", "addtask", true},
 		{"/cancel", "cancel", true},
 		{"/now", "", false},
 		{"/db", "", false},
+		{"/ideabook", "", false}, // browsers are stateless, not guided flows
 		{"plain text", "", false},
 		{"*  an idea", "", false},
 	}
@@ -303,13 +304,9 @@ func TestManageIdeaFlowEditAndDelete(t *testing.T) {
 	chatID := int64(9300)
 	id := seedIdea(t, chatID, "manage me", false, "Tech")
 
-	list := startFlowGetSend(t, bot, transport, chatID, 1300, "/ideas")
-	if !strings.Contains(list.Values.Get("text"), "Manage your ideas") {
-		t.Fatalf("expected manage list, got %q", list.Values.Get("text"))
-	}
-
+	// Editing is reached from the browser's ✏️ Edit button.
 	card := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1301,
-		(CallbackData{Action: FlowSelect, FlowOpt: 0}).Json())
+		(CallbackData{Action: IdeaMenuEdit, ID: int64(id)}).Json())
 	if !strings.Contains(card, "manage me") {
 		t.Fatalf("expected item card, got %q", card)
 	}
@@ -360,9 +357,8 @@ func TestManageTogoFlowToggle(t *testing.T) {
 	chatID := int64(9301)
 	id := seedTogo(t, chatID, "toggle me", 0)
 
-	startFlowGetSend(t, bot, transport, chatID, 1310, "/togos")
 	card := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1311,
-		(CallbackData{Action: FlowSelect, FlowOpt: 0}).Json())
+		(CallbackData{Action: TogoMenuEdit, ID: int64(id)}).Json())
 	if !strings.Contains(card, "toggle me") {
 		t.Fatalf("expected togo card, got %q", card)
 	}
@@ -385,9 +381,8 @@ func TestManageTaskFlowEditWeightViaText(t *testing.T) {
 	chatID := int64(9302)
 	id := seedTask(t, chatID, "edit task", 0)
 
-	startFlowGetSend(t, bot, transport, chatID, 1320, "/tasks")
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1321,
-		(CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // card
+		(CallbackData{Action: TaskMenuEdit, ID: int64(id)}).Json()) // card
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1322,
 		(CallbackData{Action: FlowEdit}).Json()) // field list
 	prompt := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1323,
@@ -407,14 +402,14 @@ func TestManageTaskFlowEditWeightViaText(t *testing.T) {
 	}
 }
 
-func TestManageFlowEmptyList(t *testing.T) {
+func TestBrowseEmptyList(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9303)
 
-	list := startFlowGetSend(t, bot, transport, chatID, 1330, "/ideas")
-	if !strings.Contains(list.Values.Get("text"), "no ideas to manage") {
-		t.Fatalf("expected empty-list message, got %q", list.Values.Get("text"))
+	list := startFlowGetSend(t, bot, transport, chatID, 1330, "/togobook")
+	if !strings.Contains(list.Values.Get("text"), "Nothing here yet") {
+		t.Fatalf("expected empty browser message, got %q", list.Values.Get("text"))
 	}
 }
 
@@ -426,7 +421,7 @@ func TestRegisterBotCommands(t *testing.T) {
 		t.Fatal("expected a setMyCommands request")
 	}
 	cmds := req.Values.Get("commands")
-	for _, want := range []string{"addidea", "addtogo", "addtask", "ideas", "togos", "tasks", "cancel"} {
+	for _, want := range []string{"addidea", "addtogo", "addtask", "togobook", "taskbook", "ideabook", "articlebook", "cancel"} {
 		if !strings.Contains(cmds, want) {
 			t.Fatalf("expected %q in registered commands payload %q", want, cmds)
 		}
@@ -487,12 +482,11 @@ func TestManageEditDeletesTypedValue(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9603)
-	seedIdea(t, chatID, "manage me", false, "")
+	id := seedIdea(t, chatID, "manage me", false, "")
 
-	startFlowGetSend(t, bot, transport, chatID, 1630, "/ideas")
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // card
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowEdit}).Json())               // field list
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // text field -> type
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: IdeaMenuEdit, ID: int64(id)}).Json()) // card
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowEdit}).Json())                    // field list
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1631, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json())      // text field -> type
 
 	before := transport.countEndpoint("deleteMessage")
 	bot.HandleUpdate(tgbotapi.Update{Message: &tgbotapi.Message{
@@ -528,9 +522,8 @@ func TestManageTogoEditDescriptionAndExtra(t *testing.T) {
 	chatID := int64(9400)
 	id := seedTogo(t, chatID, "edit me", 0)
 
-	startFlowGetSend(t, bot, transport, chatID, 1400, "/togos")
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1401, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // card
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1402, (CallbackData{Action: FlowEdit}).Json())               // fields
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1401, (CallbackData{Action: TogoMenuEdit, ID: int64(id)}).Json()) // card
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1402, (CallbackData{Action: FlowEdit}).Json())                    // fields
 	// field index 2 = description (progress/weight/description/extra)
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1403, (CallbackData{Action: FlowSelect, FlowOpt: 2}).Json())
 	updated := sendFlowTextGetEdit(t, bot, transport, chatID, 1404, "a fresh description")
@@ -557,10 +550,9 @@ func TestManageTaskDelete(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9401)
-	seedTask(t, chatID, "delete me", 0)
+	id := seedTask(t, chatID, "delete me", 0)
 
-	startFlowGetSend(t, bot, transport, chatID, 1410, "/tasks")
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1411, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json())
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1411, (CallbackData{Action: TaskMenuEdit, ID: int64(id)}).Json())
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1412, (CallbackData{Action: FlowDelete}).Json())
 	deleted := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1413, (CallbackData{Action: FlowConfirm}).Json())
 	if !strings.Contains(deleted, "Deleted") {
@@ -576,10 +568,9 @@ func TestManageTypingOnCardReRenders(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9402)
-	seedIdea(t, chatID, "stray text test", false, "")
+	id := seedIdea(t, chatID, "stray text test", false, "")
 
-	startFlowGetSend(t, bot, transport, chatID, 1420, "/ideas")
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1421, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // card
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1421, (CallbackData{Action: IdeaMenuEdit, ID: int64(id)}).Json()) // card
 	// Typing while on the card screen (not awaiting text) should just re-render the card.
 	reRendered := sendFlowTextGetEdit(t, bot, transport, chatID, 1422, "ignored text")
 	if !strings.Contains(reRendered, "stray text test") {
@@ -591,13 +582,12 @@ func TestManageBackNavigation(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9403)
-	seedIdea(t, chatID, "nav idea", false, "")
+	id := seedIdea(t, chatID, "nav idea", false, "")
 
-	startFlowGetSend(t, bot, transport, chatID, 1430, "/ideas")
-	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1431, (CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // card
+	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1431, (CallbackData{Action: IdeaMenuEdit, ID: int64(id)}).Json()) // card
 	// card -> back -> list
 	list := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1432, (CallbackData{Action: FlowBack}).Json())
-	if !strings.Contains(list, "Manage your ideas") {
+	if !strings.Contains(list, "Pick one to edit") {
 		t.Fatalf("expected back to list, got %q", list)
 	}
 	// list -> select -> card -> edit -> back -> card

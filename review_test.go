@@ -76,17 +76,16 @@ func TestCallbackWithNilMessageDoesNotPanic(t *testing.T) {
 	}
 }
 
-// TestManageTogoFlowDelete exercises the guided /togos delete path end-to-end
-// (a destructive operation that previously had no coverage).
+// TestManageTogoFlowDelete exercises the togo edit-card delete path end-to-end
+// (reached from the togo browser's Edit button — a destructive operation).
 func TestManageTogoFlowDelete(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9500)
-	seedTogo(t, chatID, "delete me", 0)
+	id := seedTogo(t, chatID, "delete me", 0)
 
-	startFlowGetSend(t, bot, transport, chatID, 1500, "/togos")
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1501,
-		(CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // open card
+		(CallbackData{Action: TogoMenuEdit, ID: int64(id)}).Json()) // open card
 	confirm := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1502,
 		(CallbackData{Action: FlowDelete}).Json())
 	if !strings.Contains(confirm, "Delete this togo") {
@@ -104,17 +103,16 @@ func TestManageTogoFlowDelete(t *testing.T) {
 	}
 }
 
-// TestManageTaskFlowToggle exercises the guided /tasks toggle-done path
-// end-to-end (previously uncovered).
+// TestManageTaskFlowToggle exercises the task edit-card toggle-done path
+// end-to-end (reached from the task browser's Edit button).
 func TestManageTaskFlowToggle(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
 	chatID := int64(9501)
 	id := seedTask(t, chatID, "toggle me", 0)
 
-	startFlowGetSend(t, bot, transport, chatID, 1510, "/tasks")
 	sendCallbackAndGetEditedText(t, bot, transport, chatID, 1511,
-		(CallbackData{Action: FlowSelect, FlowOpt: 0}).Json()) // open card
+		(CallbackData{Action: TaskMenuEdit, ID: int64(id)}).Json()) // open card
 	toggled := sendCallbackAndGetEditedText(t, bot, transport, chatID, 1512,
 		(CallbackData{Action: FlowToggle}).Json())
 	if !strings.Contains(toggled, "Toggled") {

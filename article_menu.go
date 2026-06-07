@@ -40,16 +40,16 @@ func articleListLine(article Article.Article) string {
 // articleButtonRows builds one inline button per article ("#id: header"), each
 // opening that article's detail view.
 func articleButtonRows(articles Article.ArticleList, categoryID int64) [][]tgbotapi.InlineKeyboardButton {
-	rows := make([][]tgbotapi.InlineKeyboardButton, 0, len(articles))
+	buttons := make([]tgbotapi.InlineKeyboardButton, 0, len(articles))
 	for i := range articles {
 		label := fmt.Sprintf("#%d: %s", articles[i].Id, articles[i].Header())
 		if len(label) >= MaximumInlineButtonTextLength {
 			label = fmt.Sprintf("%s...", truncateUTF8(label, MaximumInlineButtonTextLength-3))
 		}
 		data := (CallbackData{Action: ArticleMenuOpen, ID: int64(articles[i].Id), ArtCat: categoryID}).Json()
-		rows = append(rows, []tgbotapi.InlineKeyboardButton{{Text: label, CallbackData: &data}})
+		buttons = append(buttons, tgbotapi.InlineKeyboardButton{Text: label, CallbackData: &data})
 	}
-	return rows
+	return packButtonsIntoRows(buttons, MaximumNumberOfRowItems)
 }
 
 // renderArticleList builds the list view (message text + paginated inline menu).
@@ -189,25 +189,10 @@ func articleDetailOrList(articles Article.ArticleList, cb CallbackData, articleI
 	return appendWarning(text, warning), orEmptyKeyboard(kb)
 }
 
-// enterArticleEditFromMenu turns the browser message into the manage-flow edit
-// card for the selected article (so typed edits route through the manage engine).
+// enterArticleEditFromMenu turns the browser message into the edit card for the
+// selected article (so typed edits route through the shared edit engine).
 func (telegramBot *TelegramBotAPI) enterArticleEditFromMenu(owner int64, cb CallbackData, response *TelegramResponse) {
-	ent := manageEntityFor("article")
-	if ent == nil {
-		response.TextMsg = "Could not open the article editor."
-		return
-	}
-	state := &FlowState{
-		Entity:    "article",
-		Screen:    manageScreenCard,
-		ItemID:    uint64(cb.ID),
-		Data:      make(map[string]string),
-		MessageID: response.MessageBeingEditedId,
-	}
-	text, kb := telegramBot.buildManageCard(owner, state, ent, "✏️ Editing — pick a field or delete.")
-	telegramBot.flows.Set(owner, state)
-	response.TextMsg = text
-	response.InlineKeyboard = kb
+	telegramBot.enterEditFromMenu(owner, "article", uint64(cb.ID), response)
 }
 
 // ---------------------- Daily article reminder --------------------------------

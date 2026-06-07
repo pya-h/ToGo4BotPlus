@@ -363,7 +363,10 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			}
 		case "/now":
 			response.TextMsg = now.Get()
-		case "/ideabook", "/favorites":
+		// The plural-noun commands (`/ideas`, `/togos`, ...) are kept as friendly
+		// aliases of the `*book` browsers — there is no longer a separate manage
+		// menu, so every one of these opens the single rich browser.
+		case "/ideabook", "/ideas", "/favorites":
 			scope := ideaScopeAll
 			if terms[i] == "/favorites" {
 				scope = ideaScopeFav
@@ -372,9 +375,19 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			text, kb := renderIdeaList(ideas, scope, 0, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
-		case "/articlebook":
+		case "/articlebook", "/articles":
 			articles, warning := loadArticlesForScope(message.Chat.ID, 0)
 			text, kb := renderArticleList(articles, 0, 0)
+			response.TextMsg = appendWarning(text, warning)
+			response.InlineKeyboard = kb
+		case "/togobook", "/togos":
+			togos, warning := loadTogosForBrowse(message.Chat.ID)
+			text, kb := renderTogoList(togos, 0)
+			response.TextMsg = appendWarning(text, warning)
+			response.InlineKeyboard = kb
+		case "/taskbook", "/tasks":
+			tasks, warning := loadTasksForBrowse(message.Chat.ID)
+			text, kb := renderTaskList(tasks, 0)
 			response.TextMsg = appendWarning(text, warning)
 			response.InlineKeyboard = kb
 		case ArticleAddCommand:
@@ -868,6 +881,12 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 
 	case ArticleMenuList, ArticleMenuOpen, ArticleMenuRemove, ArticleMenuEdit:
 		telegramBot.handleArticleMenuCallback(callbackData, response)
+
+	case TogoMenuList, TogoMenuOpen, TogoMenuRemove, TogoMenuToggle, TogoMenuEdit:
+		telegramBot.handleTogoMenuCallback(callbackData, response)
+
+	case TaskMenuList, TaskMenuOpen, TaskMenuRemove, TaskMenuToggle, TaskMenuEdit:
+		telegramBot.handleTaskMenuCallback(callbackData, response)
 
 	default:
 		response.TextMsg = "Unsupported callback action."
