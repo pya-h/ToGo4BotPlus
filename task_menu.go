@@ -80,7 +80,7 @@ func renderTaskList(tasks Task.TaskList, page int) (string, *tgbotapi.InlineKeyb
 	}
 	pageItems := tasks[start:end]
 
-	text := fmt.Sprintf("%s (%d):\n", title, total)
+	text := fmt.Sprintf("%s — all %d so far. Tap any item below to open and manage it:\n", title, total)
 	for i := range pageItems {
 		text += "\n" + taskListLine(pageItems[i])
 	}

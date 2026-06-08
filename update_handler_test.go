@@ -153,12 +153,24 @@ func TestHandleUpdateHelpCommand(t *testing.T) {
 		Chat:      &tgbotapi.Chat{ID: 7051},
 	}})
 
-	req, ok := transport.lastEndpoint("sendMessage")
-	if !ok {
-		t.Fatal("expected sendMessage for /help")
+	// The full reference is far over Telegram's 4096-char limit, so /help is sent
+	// as several smaller messages rather than one (rejected) giant one.
+	reqs := transport.allEndpoint("sendMessage")
+	if len(reqs) < 2 {
+		t.Fatalf("expected /help to be split into multiple messages, got %d", len(reqs))
 	}
-	if req.Values.Get("text") != HELP_MESSAGE {
-		t.Fatalf("expected /help to return HELP_MESSAGE, got %q", req.Values.Get("text"))
+	var combined strings.Builder
+	for _, req := range reqs {
+		text := req.Values.Get("text")
+		if len([]rune(text)) > 4096 {
+			t.Fatalf("a /help message exceeded Telegram's limit: %d runes", len([]rune(text)))
+		}
+		combined.WriteString(text)
+	}
+	for _, section := range []string{"## Commands", "## Tasks (separate from togos):", "## Ideas"} {
+		if !strings.Contains(combined.String(), section) {
+			t.Fatalf("combined /help output missing section %q", section)
+		}
 	}
 }
 

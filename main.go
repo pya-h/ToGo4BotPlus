@@ -107,23 +107,29 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		Command     string `json:"command"`
 		Description string `json:"description"`
 	}
+	// Grouped so the native "/" list reads logically: browse first (favorites sits
+	// next to ideas), then add, then remove, then everything else.
 	commands := []botCommand{
-		{"start", "Restart the bot and show the menu"},
-		{"help", "Show the full command help"},
-		{"addtogo", "Add a togo (guided)"},
-		{"addtask", "Add a task (guided)"},
-		{"addidea", "Add an idea (guided)"},
-		{"addarticle", "Save an article link (guided)"},
-		{"togos", "Browse your togos (interactive)"},
-		{"tasks", "Browse your tasks (interactive)"},
-		{"ideas", "Browse your ideas (interactive)"},
-		{"articles", "Browse your articles (interactive)"},
-		{"favorites", "Browse your favorite ideas"},
-		{"removetodaytogos", "Remove today's togos (interactive)"},
-		{"removealltogos", "Remove togos from any day (interactive)"},
-		{"taskreminder", "Show/Set task reminder frequency"},
-		{"cancel", "Cancel the current guided menu"},
-		{"now", "Show current date/time"},
+		// — Browse —
+		{"togos", "📋 Browse your togos (interactive)"},
+		{"tasks", "📋 Browse your tasks (interactive)"},
+		{"ideas", "📋 Browse your ideas (interactive)"},
+		{"favorites", "⭐ Browse your favorite ideas"},
+		{"articles", "📋 Browse your saved articles (interactive)"},
+		// — Add —
+		{"addtogo", "➕ Add a togo (guided)"},
+		{"addtask", "➕ Add a task (guided)"},
+		{"addidea", "➕ Add an idea (guided)"},
+		{"addarticle", "➕ Save an article link (guided)"},
+		// — Remove —
+		{"removetodaytogos", "🗑 Remove today's togos (interactive)"},
+		{"removealltogos", "🗑 Remove togos from any day (interactive)"},
+		// — Other —
+		{"taskreminder", "⏰ Show/Set task reminder frequency"},
+		{"now", "🕒 Show current date/time"},
+		{"cancel", "✖️ Cancel the current guided menu"},
+		{"help", "❓ Show the full command help"},
+		{"start", "🔄 Restart the bot and show the menu"},
 	}
 	payload, err := json.Marshal(commands)
 	if err != nil {

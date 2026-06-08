@@ -87,6 +87,16 @@ func (rt *recordingTransport) countEndpoint(endpoint string) int {
 	return count
 }
 
+func (rt *recordingTransport) allEndpoint(endpoint string) []capturedRequest {
+	matches := make([]capturedRequest, 0)
+	for _, req := range rt.requests {
+		if req.Endpoint == endpoint {
+			matches = append(matches, req)
+		}
+	}
+	return matches
+}
+
 func (rt *recordingTransport) lastEndpoint(endpoint string) (capturedRequest, bool) {
 	for i := len(rt.requests) - 1; i >= 0; i-- {
 		if rt.requests[i].Endpoint == endpoint {

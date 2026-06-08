@@ -78,7 +78,7 @@ func renderArticleList(articles Article.ArticleList, categoryID int64, page int)
 	}
 	pageItems := articles[start:end]
 
-	text := fmt.Sprintf("%s (%d):\n", title, total)
+	text := fmt.Sprintf("%s — all %d so far. Tap any item below to open and manage it:\n", title, total)
 	for i := range pageItems {
 		text += "\n" + articleListLine(pageItems[i])
 	}

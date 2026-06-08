@@ -40,6 +40,13 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 			})
 			return
 		}
+		// 0b) /help is handled here too: the full reference is far over Telegram's
+		// 4096-char per-message limit, so a single send is silently rejected. Split
+		// it into section-sized messages instead.
+		if normalizeSlashCommand(update.Message.Text) == "/help" {
+			telegramBot.sendHelp(chatID, update.Message.MessageID)
+			return
+		}
 		// 1) A guided-flow slash command (/addIdea, /cancel, ...) takes priority.
 		if cmd, arg, ok := parseFlowCommand(update.Message.Text); ok {
 			telegramBot.handleFlowCommand(chatID, cmd, arg)
@@ -74,6 +81,57 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 		}
 		telegramBot.handleCallbackUpdate(update.CallbackQuery, &response)
 		telegramBot.EditTextMessage(response)
+	}
+}
+
+// helpChunkLimit caps the size of one help message's inner body, comfortably
+// under Telegram's 4096-char per-message limit once the ``` fences are added.
+const helpChunkLimit = 3500
+
+// helpMessageChunks splits HELP_MESSAGE into Telegram-safe pieces. It strips the
+// single outer code fence, packs whole "## " sections together up to
+// helpChunkLimit, then re-wraps each piece in its own fence so every part still
+// renders as monospace.
+func helpMessageChunks() []string {
+	body := strings.TrimPrefix(HELP_MESSAGE, "WTF?\n```\n")
+	body = strings.TrimSuffix(body, "\n```")
+
+	sections := strings.Split(body, "\n## ")
+	chunks := make([]string, 0, 4)
+	var current strings.Builder
+	for i, section := range sections {
+		if i > 0 {
+			section = "## " + section // re-attach the delimiter Split consumed
+		}
+		if current.Len() > 0 && current.Len()+len(section)+1 > helpChunkLimit {
+			chunks = append(chunks, current.String())
+			current.Reset()
+		}
+		if current.Len() > 0 {
+			current.WriteString("\n")
+		}
+		current.WriteString(section)
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+
+	for i, chunk := range chunks {
+		chunks[i] = "```\n" + chunk + "\n```"
+	}
+	return chunks
+}
+
+// sendHelp delivers the full command reference as a sequence of messages, each
+// within Telegram's size limit. Only the first part replies to the user's
+// command so the thread isn't spammed with reply arrows.
+func (telegramBot *TelegramBotAPI) sendHelp(chatID int64, replyTo int) {
+	for i, chunk := range helpMessageChunks() {
+		response := TelegramResponse{TargetChatId: chatID, TextMsg: chunk}
+		if i == 0 {
+			response.MessageRepliedTo = replyTo
+		}
+		telegramBot.SendTextMessage(response)
 	}
 }
 
@@ -395,7 +453,9 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 		case "/now":
 			response.TextMsg = now.Get()
 		case "/help":
-			response.TextMsg = HELP_MESSAGE
+			// HELP_MESSAGE exceeds Telegram's per-message limit; send it in parts.
+			telegramBot.sendHelp(message.Chat.ID, message.MessageID)
+			response.TextMsg = "📖 Help sent above."
 		// Each concept has a single rich browser, opened with the plural-noun
 		// command (`/togos`, `/tasks`, `/ideas`, `/articles`).
 		case "/ideas", "/favorites":
