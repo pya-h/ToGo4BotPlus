@@ -237,7 +237,8 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			switch mode {
 			case TaskStatsToken:
 				includeInactive := i+2 < numOfTerms && terms[i+2] == TaskIncludeInactiveToken
-				tasks, warning := Task.Load(message.Chat.ID, includeInactive, false)
+				// Stats must include completed tasks so a tick shows as positive progress.
+				tasks, warning := Task.Load(message.Chat.ID, includeInactive, true)
 				if tasks == nil {
 					if warning != nil {
 						response.TextMsg = warning.Error()
@@ -256,7 +257,8 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 				includeInactive := i+3 < numOfTerms && terms[i+3] == TaskIncludeInactiveToken
 
 				togos, togoWarning := Togo.Load(message.Chat.ID, !allDays, allDays && allDaysToken == "-a")
-				tasks, taskWarning := Task.Load(message.Chat.ID, includeInactive, false)
+				// Stats must include completed tasks so a tick shows as positive progress.
+				tasks, taskWarning := Task.Load(message.Chat.ID, includeInactive, true)
 
 				parts := make([]string, 0)
 				if togos != nil {
@@ -363,7 +365,8 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			}
 		case TaskTickCommand, "✅t":
 			includeInactive := i+1 < numOfTerms && terms[i+1] == TaskIncludeInactiveToken
-			tasks, warning := Task.Load(message.Chat.ID, includeInactive, false)
+			// Include completed tasks so they appear with ✅ and can be toggled back.
+			tasks, warning := Task.Load(message.Chat.ID, includeInactive, true)
 			if tasks != nil {
 				if len(tasks) >= 1 {
 					response.TextMsg = "Here are your tasks to tick:"
@@ -781,7 +784,8 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 
 	case TickTask:
-		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		// Include completed tasks so an already-done task can be un-ticked.
+		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, true)
 		if tasks == nil {
 			if warning != nil {
 				response.TextMsg = warning.Error()
@@ -806,7 +810,8 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 			break
 		}
 
-		updated, warn2 := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		// Include completed tasks so the just-ticked task stays in the menu with ✅.
+		updated, warn2 := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, true)
 		if updated == nil {
 			if warn2 != nil {
 				response.TextMsg = warn2.Error()
@@ -895,7 +900,9 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		}
 
 	case ShowTaskMenuPage:
-		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, false)
+		// Tick menu needs completed tasks (to show ✅ and allow un-tick); remove menu keeps its existing scope.
+		includeCompleted := callbackData.MenuAction == TickTask
+		tasks, warning := Task.Load(response.TargetChatId, callbackData.TaskIncludeInactive, includeCompleted)
 		if tasks == nil {
 			if warning != nil {
 				response.TextMsg = warning.Error()
