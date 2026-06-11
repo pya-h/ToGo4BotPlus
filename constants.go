@@ -19,6 +19,7 @@ const (
 	TaskTickCommand          = "✅T"
 	TaskRemoveCommand        = "❌T"
 	TaskSettingsCommand      = "~s"
+	TaskRemindCountCommand   = "~n"
 	TaskIncludeInactiveToken = "+i"
 	TaskStatsToken           = "t"
 	TaskBothStatsToken       = "b"
@@ -165,6 +166,15 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 =>     ~s     [0|1|2|4|6|8|12|24]
 
 	Set reminders/day for task reminders. 0 disables reminders.
+
+=>     ~n
+
+	Show how many tasks each reminder will surface (default 2).
+
+=>     ~n     [1..10]
+
+	Set how many tasks each reminder will surface. Each reminder picks that many
+	random ongoing tasks, weighted by Weight, and links to the /tasks menu.
 
 =>     %     t
 

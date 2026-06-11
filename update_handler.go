@@ -422,6 +422,22 @@ func (telegramBot *TelegramBotAPI) handleMessageUpdate(message *tgbotapi.Message
 			} else {
 				response.TextMsg = "Could not load tasks for removing."
 			}
+		case TaskRemindCountCommand, "/tasksperreminder":
+			if i+1 < numOfTerms {
+				if count, err := strconv.Atoi(terms[i+1]); err == nil {
+					if err := Task.SetTasksPerReminder(message.Chat.ID, count); err == nil {
+						response.TextMsg = fmt.Sprintf("Tasks per reminder updated to %d.", count)
+					} else {
+						response.TextMsg = err.Error()
+					}
+				} else {
+					response.TextMsg = fmt.Sprintf("Usage: ~n  <count>\nAllowed: %d–%d", Task.MinTasksPerReminder, Task.MaxTasksPerReminder)
+				}
+			} else if setting, err := Task.GetReminderSetting(message.Chat.ID); err == nil {
+				response.TextMsg = fmt.Sprintf("Current tasks per reminder: %d\nAllowed: %d–%d", setting.TasksPerReminder, Task.MinTasksPerReminder, Task.MaxTasksPerReminder)
+			} else {
+				response.TextMsg = err.Error()
+			}
 		case TaskSettingsCommand, "/taskreminder":
 			if i+1 < numOfTerms {
 				if times, err := strconv.Atoi(terms[i+1]); err == nil {

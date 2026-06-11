@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -234,6 +235,70 @@ func allowedTaskReminderValuesText() string {
 	return strings.Join(parts, ", ")
 }
 
+// pickWeightedRandomTasks samples up to n tasks without replacement, weighted by
+// each task's Weight (so a higher-weight task is more likely to be surfaced).
+// Weight 0 is treated as 1 so a misconfigured task can still be picked.
+func pickWeightedRandomTasks(tasks Task.TaskList, n int) Task.TaskList {
+	if n <= 0 || len(tasks) == 0 {
+		return Task.TaskList{}
+	}
+	pool := make(Task.TaskList, len(tasks))
+	copy(pool, tasks)
+
+	if n > len(pool) {
+		n = len(pool)
+	}
+	picked := make(Task.TaskList, 0, n)
+
+	for len(picked) < n && len(pool) > 0 {
+		totalWeight := 0
+		for _, t := range pool {
+			w := int(t.Weight)
+			if w < 1 {
+				w = 1
+			}
+			totalWeight += w
+		}
+		// totalWeight is always >=1 here (pool non-empty, each weight clamped to >=1).
+		target := rand.Intn(totalWeight)
+		for i, t := range pool {
+			w := int(t.Weight)
+			if w < 1 {
+				w = 1
+			}
+			target -= w
+			if target < 0 {
+				picked = append(picked, t)
+				pool = append(pool[:i], pool[i+1:]...)
+				break
+			}
+		}
+	}
+	return picked
+}
+
+// BuildTaskReminderMessage formats the periodic task reminder: a short header
+// stating how many ongoing tasks are surfaced, each picked task rendered in
+// full, plus an inline button that opens the same view as /tasks.
+func BuildTaskReminderMessage(picked Task.TaskList) (string, *tgbotapi.InlineKeyboardMarkup) {
+	openMenuData := (CallbackData{Action: TaskMenuList, MenuPage: 0}).Json()
+	openMenuButton := []tgbotapi.InlineKeyboardButton{{Text: "📋 Open tasks menu", CallbackData: &openMenuData}}
+	kb := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{openMenuButton}}
+
+	if len(picked) == 0 {
+		return "⏰ Task reminder — no ongoing tasks right now. Tap the button to open your tasks menu.", &kb
+	}
+
+	header := fmt.Sprintf("⏰ Task reminder — here are %d of your ongoing tasks:", len(picked))
+	now := Togo.Today().Time
+	parts := make([]string, 0, len(picked)+1)
+	parts = append(parts, header)
+	for i := range picked {
+		parts = append(parts, picked[i].ToString(now))
+	}
+	return strings.Join(parts, "\n\n"), &kb
+}
+
 func (telegramBot *TelegramBotAPI) processTaskReminderTick(now Togo.Date) {
 	owners, err := Task.LoadActiveOwners(now.Time)
 	if err != nil {
@@ -269,12 +334,9 @@ func (telegramBot *TelegramBotAPI) processTaskReminderTick(now Togo.Date) {
 			continue
 		}
 
-		pages := BuildTaskPages(tasks, false, true, MaximumTaskMessageLength)
-		response := TelegramResponse{TargetChatId: ownerID, TextMsg: pages[0]}
-		if len(pages) > 1 {
-			response.InlineKeyboard = TaskPageNavigationKeyboard(0, len(pages), false, true)
-		}
-		telegramBot.SendTextMessage(response)
+		picked := pickWeightedRandomTasks(tasks, setting.TasksPerReminder)
+		text, kb := BuildTaskReminderMessage(picked)
+		telegramBot.SendTextMessage(TelegramResponse{TargetChatId: ownerID, TextMsg: text, InlineKeyboard: kb})
 
 		if warning != nil {
 			log.Printf("%s owner %d load warning: %v", TaskReminderWarningPrefix, ownerID, warning)

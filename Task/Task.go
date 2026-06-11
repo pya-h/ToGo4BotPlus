@@ -31,8 +31,16 @@ const CREATE_TASKS_TABLE_QUERY string = `CREATE TABLE IF NOT EXISTS tasks (
 const CREATE_TASK_SETTINGS_TABLE_QUERY string = `CREATE TABLE IF NOT EXISTS task_settings (
 	owner_id BIGINT PRIMARY KEY,
 	reminders_per_day INTEGER NOT NULL DEFAULT 4,
+	tasks_per_reminder INTEGER NOT NULL DEFAULT 2,
 	last_reminder_slot TEXT NOT NULL DEFAULT ''
 )`
+
+// Bounds for the per-user "how many tasks per reminder" setting.
+const (
+	MinTasksPerReminder     = 1
+	MaxTasksPerReminder     = 10
+	DefaultTasksPerReminder = 2
+)
 
 var allowedReminderTimes = map[int]bool{
 	0:  true,
@@ -70,6 +78,7 @@ type TaskList []Task
 type ReminderSetting struct {
 	OwnerId          int64
 	RemindersPerDay  int
+	TasksPerReminder int
 	LastReminderSlot string
 }
 
@@ -117,7 +126,7 @@ func (task *Task) Save() (uint64, error) {
 
 func isCommand(term string) bool {
 	switch term {
-	case "+", "%", "#", "#️⃣", "$", "✅", "❌", "/db", "/now", "^", "~", "~s", "&", "✅T", "✅t", "❌T", "❌t", "tk", "TK", "*", ";", ";u", "*x", ">", ">l", ">u", ">x":
+	case "+", "%", "#", "#️⃣", "$", "✅", "❌", "/db", "/now", "^", "~", "~s", "~n", "&", "✅T", "✅t", "❌T", "❌t", "tk", "TK", "*", ";", ";u", "*x", ">", ">l", ">u", ">x":
 		return true
 	default:
 		return false
@@ -337,6 +346,29 @@ func (tasks TaskList) Index(taskID uint64) int {
 	return -1
 }
 
+// addColumnIfMissing adds a column to a table when it isn't already present.
+// Used for defensive in-place migrations against older databases.
+func addColumnIfMissing(db *sql.DB, table, column, definition string) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return
+		}
+		if name == column {
+			return
+		}
+	}
+	_, _ = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
+}
+
 func InitDatabase() error {
 	db, err := sql.Open("sqlite3", DATABASE_NAME)
 	if err != nil {
@@ -350,6 +382,9 @@ func InitDatabase() error {
 	if _, err := db.Exec(CREATE_TASK_SETTINGS_TABLE_QUERY); err != nil {
 		return err
 	}
+	// Defensive migration for pre-existing task_settings rows that don't have the
+	// tasks_per_reminder column yet. addColumnIfMissing is a no-op when present.
+	addColumnIfMissing(db, "task_settings", "tasks_per_reminder", fmt.Sprintf("INTEGER NOT NULL DEFAULT %d", DefaultTasksPerReminder))
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_id)"); err != nil {
 		return err
 	}
@@ -469,7 +504,7 @@ func EnsureReminderSetting(ownerID int64) error {
 	}
 	defer db.Close()
 
-	_, err = db.Exec("INSERT OR IGNORE INTO task_settings (owner_id, reminders_per_day, last_reminder_slot) VALUES (?, 4, '')", ownerID)
+	_, err = db.Exec("INSERT OR IGNORE INTO task_settings (owner_id, reminders_per_day, tasks_per_reminder, last_reminder_slot) VALUES (?, 4, ?, '')", ownerID, DefaultTasksPerReminder)
 	return err
 }
 
@@ -484,12 +519,15 @@ func GetReminderSetting(ownerID int64) (ReminderSetting, error) {
 	}
 	defer db.Close()
 
-	setting := ReminderSetting{OwnerId: ownerID, RemindersPerDay: 4, LastReminderSlot: ""}
-	if err := db.QueryRow("SELECT reminders_per_day, last_reminder_slot FROM task_settings WHERE owner_id=?", ownerID).Scan(&setting.RemindersPerDay, &setting.LastReminderSlot); err != nil {
+	setting := ReminderSetting{OwnerId: ownerID, RemindersPerDay: 4, TasksPerReminder: DefaultTasksPerReminder, LastReminderSlot: ""}
+	if err := db.QueryRow("SELECT reminders_per_day, tasks_per_reminder, last_reminder_slot FROM task_settings WHERE owner_id=?", ownerID).Scan(&setting.RemindersPerDay, &setting.TasksPerReminder, &setting.LastReminderSlot); err != nil {
 		return ReminderSetting{}, err
 	}
 	if !IsValidReminderTimes(setting.RemindersPerDay) {
 		setting.RemindersPerDay = 4
+	}
+	if setting.TasksPerReminder < MinTasksPerReminder || setting.TasksPerReminder > MaxTasksPerReminder {
+		setting.TasksPerReminder = DefaultTasksPerReminder
 	}
 	return setting, nil
 }
@@ -510,9 +548,31 @@ func SetReminderTimes(ownerID int64, times int) error {
 	defer db.Close()
 
 	_, err = db.Exec(
-		"INSERT INTO task_settings (owner_id, reminders_per_day, last_reminder_slot) VALUES (?, ?, '') ON CONFLICT(owner_id) DO UPDATE SET reminders_per_day=excluded.reminders_per_day",
+		"INSERT INTO task_settings (owner_id, reminders_per_day, tasks_per_reminder, last_reminder_slot) VALUES (?, ?, ?, '') ON CONFLICT(owner_id) DO UPDATE SET reminders_per_day=excluded.reminders_per_day",
 		ownerID,
 		times,
+		DefaultTasksPerReminder,
+	)
+	return err
+}
+
+// SetTasksPerReminder updates the per-user "how many tasks per reminder" count.
+// Valid range: [MinTasksPerReminder, MaxTasksPerReminder].
+func SetTasksPerReminder(ownerID int64, count int) error {
+	if count < MinTasksPerReminder || count > MaxTasksPerReminder {
+		return fmt.Errorf("tasks per reminder must be between %d and %d", MinTasksPerReminder, MaxTasksPerReminder)
+	}
+
+	db, err := sql.Open("sqlite3", DATABASE_NAME)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec(
+		"INSERT INTO task_settings (owner_id, reminders_per_day, tasks_per_reminder, last_reminder_slot) VALUES (?, 4, ?, '') ON CONFLICT(owner_id) DO UPDATE SET tasks_per_reminder=excluded.tasks_per_reminder",
+		ownerID,
+		count,
 	)
 	return err
 }

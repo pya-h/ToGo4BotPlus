@@ -96,7 +96,7 @@ func (articles ArticleList) Add(newArticle *Article) ArticleList {
 func isCommand(term string) bool {
 	switch term {
 	case "+", "%", "#", "#️⃣", "$", "✅", "❌", "/db", "/now",
-		"^", "~", "~s", "&", "✅T", "✅t", "❌T", "❌t",
+		"^", "~", "~s", "~n", "&", "✅T", "✅t", "❌T", "❌t",
 		"tk", "TK", "*", ";", ";u", "*x",
 		">", ">l", ">u", ">x":
 		return true

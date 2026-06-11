@@ -126,6 +126,7 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		{"removealltogos", "🗑 Remove togos from any day (interactive)"},
 		// — Other —
 		{"taskreminder", "⏰ Show/Set task reminder frequency"},
+		{"tasksperreminder", "🎲 Show/Set how many tasks per reminder (1–10)"},
 		{"now", "🕒 Show current date/time"},
 		{"cancel", "✖️ Cancel the current guided menu"},
 		{"help", "❓ Show the full command help"},
