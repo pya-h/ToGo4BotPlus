@@ -2,6 +2,7 @@ package Idea
 
 import (
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -326,28 +327,76 @@ func TestToggleFavoriteAndFavoritesFilter(t *testing.T) {
 	}
 }
 
-func TestLoadFavoriteOwnersOnlyReturnsOwnersWithFavorites(t *testing.T) {
+func TestLoadRemindableOwnersReturnsFavoriteOrHighPriorityOwners(t *testing.T) {
 	withIsolatedIdeaDatabase(t)
 
 	withFav := int64(21)
-	withoutFav := int64(22)
+	withHigh := int64(22)
+	plainOnly := int64(23)
 
 	favIdea, _ := Extract(withFav, []string{"keep me"})
 	favID, _ := favIdea.Save()
 	if _, err := ToggleFavorite(withFav, favID); err != nil {
 		t.Fatalf("toggle failed: %v", err)
 	}
-	plain, _ := Extract(withoutFav, []string{"not special"})
+	highIdea, _ := Extract(withHigh, []string{"urgent", "+!"})
+	if _, err := highIdea.Save(); err != nil {
+		t.Fatalf("save high-priority failed: %v", err)
+	}
+	plain, _ := Extract(plainOnly, []string{"not special"})
 	if _, err := plain.Save(); err != nil {
 		t.Fatalf("save failed: %v", err)
 	}
 
-	owners, err := LoadFavoriteOwners()
+	owners, err := LoadRemindableOwners()
 	if err != nil {
-		t.Fatalf("LoadFavoriteOwners failed: %v", err)
+		t.Fatalf("LoadRemindableOwners failed: %v", err)
 	}
-	if len(owners) != 1 || owners[0] != withFav {
-		t.Fatalf("expected only owner %d, got %v", withFav, owners)
+	if len(owners) != 2 {
+		t.Fatalf("expected 2 remindable owners (fav + high), got %v", owners)
+	}
+	if !slices.Contains(owners, withFav) || !slices.Contains(owners, withHigh) {
+		t.Fatalf("expected owners %d and %d, got %v", withFav, withHigh, owners)
+	}
+	if slices.Contains(owners, plainOnly) {
+		t.Fatalf("plain-only owner %d should be excluded, got %v", plainOnly, owners)
+	}
+}
+
+func TestLoadRemindablePoolIsFavoriteOrHighPriority(t *testing.T) {
+	withIsolatedIdeaDatabase(t)
+	owner := int64(41)
+
+	fav, _ := Extract(owner, []string{"favorited"})
+	favID, _ := fav.Save()
+	if _, err := ToggleFavorite(owner, favID); err != nil {
+		t.Fatalf("toggle failed: %v", err)
+	}
+	high, _ := Extract(owner, []string{"high", "+!"})
+	if _, err := high.Save(); err != nil {
+		t.Fatalf("save high failed: %v", err)
+	}
+	both, _ := Extract(owner, []string{"both", "+!"})
+	bothID, _ := both.Save()
+	if _, err := ToggleFavorite(owner, bothID); err != nil {
+		t.Fatalf("toggle both failed: %v", err)
+	}
+	plain, _ := Extract(owner, []string{"plain"})
+	if _, err := plain.Save(); err != nil {
+		t.Fatalf("save plain failed: %v", err)
+	}
+
+	pool, err := LoadRemindable(owner)
+	if err != nil {
+		t.Fatalf("LoadRemindable failed: %v", err)
+	}
+	if len(pool) != 3 {
+		t.Fatalf("expected 3 remindable ideas (fav, high, both), got %d", len(pool))
+	}
+	for i := range pool {
+		if !pool[i].IsFavorite && !pool[i].IsHighPriority {
+			t.Fatalf("remindable pool contains a plain idea: %+v", pool[i])
+		}
 	}
 }
 

@@ -34,6 +34,7 @@ const (
 	ideaScopeHigh     = 1
 	ideaScopeFav      = 2
 	ideaScopeCategory = 3
+	ideaScopeRemind   = 4 // reminder pool: favorite OR high-priority
 )
 
 // loadIdeasForScope loads the owner's ideas filtered by the browser scope.
@@ -45,6 +46,8 @@ func loadIdeasForScope(ownerID int64, scope int, categoryID int64) (Idea.IdeaLis
 		return Idea.Load(ownerID, false, true, 0)
 	case ideaScopeCategory:
 		return Idea.Load(ownerID, false, false, categoryID)
+	case ideaScopeRemind:
+		return Idea.LoadRemindable(ownerID)
 	default:
 		return Idea.Load(ownerID, false, false, 0)
 	}
@@ -58,6 +61,8 @@ func ideaScopeTitle(scope int) string {
 		return "❤️ Favorite ideas"
 	case ideaScopeCategory:
 		return "🏷 Ideas in category"
+	case ideaScopeRemind:
+		return "💡 Favorite & high-priority ideas"
 	default:
 		return "💡 Your ideas"
 	}
@@ -196,14 +201,15 @@ func renderIdeaDetail(ideas Idea.IdeaList, scope int, categoryID int64, ideaID u
 	return text, &kb, true
 }
 
-// renderIdeaReminder renders a fixed batch of favorites (no pagination) using the
-// same line format and the same open-on-tap mechanism (favorites scope).
+// renderIdeaReminder renders a fixed batch of favorite / high-priority ideas (no
+// pagination) using the same line format and the same open-on-tap mechanism
+// (reminder scope, so tapping a high-priority non-favorite still opens it).
 func renderIdeaReminder(ideas Idea.IdeaList) (string, *tgbotapi.InlineKeyboardMarkup) {
-	text := "❤️ A few of your favorite ideas to revisit:\n"
+	text := "💡 A few ideas worth revisiting:\n"
 	for i := range ideas {
 		text += "\n" + ideaListLine(ideas[i])
 	}
-	menu := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: ideaButtonRows(ideas, ideaScopeFav, 0)}
+	menu := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: ideaButtonRows(ideas, ideaScopeRemind, 0)}
 	return text, &menu
 }
 
@@ -346,13 +352,14 @@ func (telegramBot *TelegramBotAPI) RemindFavoriteIdeas() {
 }
 
 // processIdeaReminderTick is one reminder pass. For every owner with at least one
-// favorite idea: if they have no scheduled time yet, just compute one and move on
-// (no message); if their time has arrived, send up to IdeaReminderBatchSize random
-// favorites and schedule the next reminder a random 1–30 days out.
+// favorite or high-priority idea: if they have no scheduled time yet, just compute
+// one and move on (no message); if their time has arrived, send up to
+// IdeaReminderBatchSize random ideas from that pool and schedule the next reminder
+// a random 1–30 days out.
 func (telegramBot *TelegramBotAPI) processIdeaReminderTick(now time.Time) {
-	owners, err := Idea.LoadFavoriteOwners()
+	owners, err := Idea.LoadRemindableOwners()
 	if err != nil {
-		log.Println("idea reminder tick: could not load favorite owners:", err.Error())
+		log.Println("idea reminder tick: could not load remindable owners:", err.Error())
 		return
 	}
 	for _, owner := range owners {
@@ -364,15 +371,15 @@ func (telegramBot *TelegramBotAPI) processIdeaReminderTick(now time.Time) {
 		if now.Before(next) {
 			continue
 		}
-		favorites, loadErr := Idea.Load(owner, false, true, 0)
+		remindable, loadErr := Idea.LoadRemindable(owner)
 		if loadErr != nil {
-			log.Println("idea reminder tick: load favorites failed:", loadErr.Error())
+			log.Println("idea reminder tick: load remindable ideas failed:", loadErr.Error())
 		}
-		batch := pickRandomIdeas(favorites, IdeaReminderBatchSize)
+		batch := pickRandomIdeas(remindable, IdeaReminderBatchSize)
 		if len(batch) == 0 {
 			// Nothing to send (a hard load error left the list empty, or the
-			// favorites were just cleared). Leave the schedule due and retry next
-			// tick rather than burning this reminder window.
+			// favorites/high-priority flags were just cleared). Leave the schedule
+			// due and retry next tick rather than burning this reminder window.
 			continue
 		}
 		telegramBot.sendIdeaReminder(owner, batch)

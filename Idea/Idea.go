@@ -354,59 +354,74 @@ func addColumnIfMissing(db *sql.DB, table, column, definition string) {
 
 // Load returns an owner's ideas, optionally filtered. categoryID == 0 means no
 // category filter; pass a real id (see LookupCategoryID) to filter by category.
+// ideaSelectPrefix is the shared SELECT/JOIN used by every idea loader; callers
+// append their own WHERE/ORDER clauses.
+const ideaSelectPrefix = `SELECT i.id, i.owner_id, i.text, i.is_high_priority, i.is_favorite, i.category_id, COALESCE(c.name, ''), i.created_at
+	FROM ideas i LEFT JOIN idea_categories c ON c.id = i.category_id`
+
 func Load(ownerID int64, onlyHighPriority bool, onlyFavorites bool, categoryID int64) (ideas IdeaList, err error) {
+	query := ideaSelectPrefix + " WHERE i.owner_id=?"
+	args := []interface{}{ownerID}
+	if onlyHighPriority {
+		query += " AND i.is_high_priority=1"
+	}
+	if onlyFavorites {
+		query += " AND i.is_favorite=1"
+	}
+	if categoryID != 0 {
+		query += " AND i.category_id=?"
+		args = append(args, categoryID)
+	}
+	query += " ORDER BY i.is_high_priority DESC, i.created_at DESC, i.id DESC"
+	return queryIdeas(query, args...)
+}
+
+// LoadRemindable returns the ideas eligible for the idea reminder: every
+// favorite OR high-priority idea for the owner (the reminder picks one at
+// random from this pool).
+func LoadRemindable(ownerID int64) (IdeaList, error) {
+	query := ideaSelectPrefix + ` WHERE i.owner_id=? AND (i.is_favorite=1 OR i.is_high_priority=1)
+		ORDER BY i.is_high_priority DESC, i.created_at DESC, i.id DESC`
+	return queryIdeas(query, ownerID)
+}
+
+// queryIdeas runs an idea SELECT (built on ideaSelectPrefix) and scans the rows
+// into an IdeaList, tolerating individual corrupted rows.
+func queryIdeas(query string, args ...interface{}) (ideas IdeaList, err error) {
 	corruptedRows := 0
 	ideas = make(IdeaList, 0)
-	err = nil
 
-	if db, e := sql.Open("sqlite3", DATABASE_NAME); e == nil {
-		defer db.Close()
+	db, e := sql.Open("sqlite3", DATABASE_NAME)
+	if e != nil {
+		return ideas, e
+	}
+	defer db.Close()
 
-		query := `SELECT i.id, i.owner_id, i.text, i.is_high_priority, i.is_favorite, i.category_id, COALESCE(c.name, ''), i.created_at
-			FROM ideas i LEFT JOIN idea_categories c ON c.id = i.category_id
-			WHERE i.owner_id=?`
-		args := []interface{}{ownerID}
-		if onlyHighPriority {
-			query += " AND i.is_high_priority=1"
-		}
-		if onlyFavorites {
-			query += " AND i.is_favorite=1"
-		}
-		if categoryID != 0 {
-			query += " AND i.category_id=?"
-			args = append(args, categoryID)
-		}
-		query += " ORDER BY i.is_high_priority DESC, i.created_at DESC, i.id DESC"
+	rows, e := db.Query(query, args...)
+	if e != nil {
+		return ideas, e
+	}
+	defer rows.Close()
 
-		rows, e := db.Query(query, args...)
-		if e != nil {
-			err = e
-			return
-		}
-		defer rows.Close()
+	for rows.Next() {
+		var idea Idea
+		var priority, favorite int
+		var createdAt sql.NullTime
 
-		for rows.Next() {
-			var idea Idea
-			var priority, favorite int
-			var createdAt sql.NullTime
-
-			scanErr := rows.Scan(&idea.Id, &idea.OwnerId, &idea.Text, &priority, &favorite, &idea.CategoryId, &idea.Category, &createdAt)
-			if scanErr != nil {
-				corruptedRows++
-				continue
-			}
-			idea.IsHighPriority = priority != 0
-			idea.IsFavorite = favorite != 0
-			if createdAt.Valid {
-				idea.CreatedAt = Togo.Date{Time: createdAt.Time}
-			}
-			ideas = ideas.Add(&idea)
+		scanErr := rows.Scan(&idea.Id, &idea.OwnerId, &idea.Text, &priority, &favorite, &idea.CategoryId, &idea.Category, &createdAt)
+		if scanErr != nil {
+			corruptedRows++
+			continue
 		}
-		if rowErr := rows.Err(); rowErr != nil {
-			return ideas, rowErr
+		idea.IsHighPriority = priority != 0
+		idea.IsFavorite = favorite != 0
+		if createdAt.Valid {
+			idea.CreatedAt = Togo.Date{Time: createdAt.Time}
 		}
-	} else {
-		err = e
+		ideas = ideas.Add(&idea)
+	}
+	if rowErr := rows.Err(); rowErr != nil {
+		return ideas, rowErr
 	}
 
 	if corruptedRows > 0 {
@@ -415,9 +430,10 @@ func Load(ownerID int64, onlyHighPriority bool, onlyFavorites bool, categoryID i
 	return
 }
 
-// LoadFavoriteOwners returns the distinct owners that have at least one favorite
-// idea — used to drive the favorite-idea reminder tick efficiently.
-func LoadFavoriteOwners() ([]int64, error) {
+// LoadRemindableOwners returns the distinct owners that have at least one
+// favorite OR high-priority idea — used to drive the idea reminder tick
+// efficiently.
+func LoadRemindableOwners() ([]int64, error) {
 	owners := make([]int64, 0)
 	db, err := sql.Open("sqlite3", DATABASE_NAME)
 	if err != nil {
@@ -425,7 +441,7 @@ func LoadFavoriteOwners() ([]int64, error) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT DISTINCT owner_id FROM ideas WHERE is_favorite=1")
+	rows, err := db.Query("SELECT DISTINCT owner_id FROM ideas WHERE is_favorite=1 OR is_high_priority=1")
 	if err != nil {
 		return nil, err
 	}

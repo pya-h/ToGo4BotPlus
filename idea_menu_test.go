@@ -369,6 +369,29 @@ func TestProcessIdeaReminderIgnoresOwnersWithoutFavorites(t *testing.T) {
 	}
 }
 
+func TestProcessIdeaReminderIncludesHighPriorityNonFavorites(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	owner := int64(8103)
+	seedIdea(t, owner, "ship the thing", true, "") // high priority, never favorited
+
+	restore := ideaReminderDelta
+	ideaReminderDelta = func() time.Duration { return 24 * time.Hour }
+	t.Cleanup(func() { ideaReminderDelta = restore })
+
+	base := time.Date(2026, 6, 7, 9, 0, 0, 0, time.UTC)
+	bot.processIdeaReminderTick(base)                     // schedule
+	bot.processIdeaReminderTick(base.Add(48 * time.Hour)) // due -> send
+
+	if got := transport.countEndpoint("sendMessage"); got != 1 {
+		t.Fatalf("a high-priority idea should drive a reminder, sent %d", got)
+	}
+	last, _ := transport.lastEndpoint("sendMessage")
+	if !strings.Contains(last.Values.Get("text"), "ship the thing") {
+		t.Fatalf("expected the high-priority idea in the reminder, got %q", last.Values.Get("text"))
+	}
+}
+
 func TestReminderBatchLimitedToThree(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)
