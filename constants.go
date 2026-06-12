@@ -250,6 +250,7 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 *   /removetodaytogos, /removealltogos open an inline menu to delete togos.
 *   /taskreminder shows the task-reminder frequency; /taskreminder  <n> sets it
     (allowed: 0/1/2/4/6/8/12/24, 0 disables).
+*   /json exports ALL your data (togos, tasks, ideas, articles) as a JSON file.
 *   /start restarts the bot and shows the menu; /help shows this help.` + "\n```"
 
 // WELCOME_MESSAGE is shown on /start, after any in-progress guided menu is reset.

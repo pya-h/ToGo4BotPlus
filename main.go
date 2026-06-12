@@ -127,6 +127,7 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		// — Other —
 		{"taskreminder", "⏰ Show/Set task reminder frequency"},
 		{"tasksperreminder", "🎲 Show/Set how many tasks per reminder (1–10)"},
+		{"json", "📦 Export all your data as a JSON file"},
 		{"now", "🕒 Show current date/time"},
 		{"cancel", "✖️ Cancel the current guided menu"},
 		{"help", "❓ Show the full command help"},

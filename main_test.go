@@ -42,10 +42,7 @@ func (rt *recordingTransport) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 		body = string(data)
 	}
-	values, err := url.ParseQuery(body)
-	if err != nil {
-		return nil, err
-	}
+	values, _ := url.ParseQuery(body) // multipart bodies won't parse; that's fine — endpoint is still captured
 
 	endpoint := path.Base(req.URL.Path)
 	rt.requests = append(rt.requests, capturedRequest{Endpoint: endpoint, Values: values})

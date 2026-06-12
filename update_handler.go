@@ -47,6 +47,11 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 			telegramBot.sendHelp(chatID, update.Message.MessageID)
 			return
 		}
+		// 0c) /json exports all user data as a downloadable JSON file.
+		if normalizeSlashCommand(update.Message.Text) == "/json" {
+			telegramBot.sendUserDataJSON(chatID, update.Message.MessageID)
+			return
+		}
 		// 1) A guided-flow slash command (/addIdea, /cancel, ...) takes priority.
 		if cmd, arg, ok := parseFlowCommand(update.Message.Text); ok {
 			telegramBot.handleFlowCommand(chatID, cmd, arg)
