@@ -173,22 +173,50 @@ func TestUpdateArticleViaTerms(t *testing.T) {
 	}
 }
 
-func TestLoadOwnersWithArticles(t *testing.T) {
+func TestLoadOwnersWithUnreadArticles(t *testing.T) {
 	withIsolatedArticleDatabase(t)
 	withArticle := int64(21)
 	without := int64(22)
 
 	a, _ := Extract(withArticle, []string{"saved"})
-	if _, err := a.Save(); err != nil {
+	id, err := a.Save()
+	if err != nil {
 		t.Fatalf("save failed: %v", err)
 	}
 
-	owners, err := LoadOwnersWithArticles()
+	owners, err := LoadOwnersWithUnreadArticles()
 	if err != nil {
-		t.Fatalf("LoadOwnersWithArticles failed: %v", err)
+		t.Fatalf("LoadOwnersWithUnreadArticles failed: %v", err)
 	}
 	if len(owners) != 1 || owners[0] != withArticle {
 		t.Fatalf("expected only owner %d, got %v (other=%d)", withArticle, owners, without)
+	}
+
+	// Marking the only article read drops the owner from the unread set and
+	// from the unread load entirely. (Save returns the id without stamping the
+	// struct, so toggle through a loaded copy — as the real callers do.)
+	loaded, _ := Load(withArticle, 0)
+	target, _ := loaded.Get(id)
+	if err := target.SetRead(withArticle, true); err != nil {
+		t.Fatalf("SetRead failed: %v", err)
+	}
+	owners, err = LoadOwnersWithUnreadArticles()
+	if err != nil {
+		t.Fatalf("LoadOwnersWithUnreadArticles after read failed: %v", err)
+	}
+	if len(owners) != 0 {
+		t.Fatalf("expected no unread owners after marking read, got %v", owners)
+	}
+	unread, _ := LoadUnread(withArticle)
+	if len(unread) != 0 {
+		t.Fatalf("expected no unread articles, got %d", len(unread))
+	}
+
+	// The article is still loadable (read flag set) and toggles back.
+	reloaded, _ := Load(withArticle, 0)
+	got, _ := reloaded.Get(id)
+	if got == nil || !got.Read {
+		t.Fatalf("expected article to be marked read after SetRead")
 	}
 }
 

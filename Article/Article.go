@@ -22,6 +22,7 @@ const CREATE_ARTICLES_TABLE_QUERY string = `CREATE TABLE IF NOT EXISTS articles 
 	title VARCHAR(512) NOT NULL,
 	category_id INTEGER NOT NULL DEFAULT 0,
 	url VARCHAR(2048) NOT NULL DEFAULT '',
+	read INTEGER NOT NULL DEFAULT 0,
 	created_at DATETIME NOT NULL
 )`
 
@@ -44,6 +45,7 @@ type Article struct {
 	CategoryId int64
 	Category   string // display name (resolved from category_id on load)
 	Url        string
+	Read       bool // whether the user has marked this article as read
 	CreatedAt  Togo.Date
 }
 
@@ -76,7 +78,11 @@ func (article Article) ToString() string {
 	if url == "" {
 		url = "(no link)"
 	}
-	return fmt.Sprintf("🔗 Article #%d) %s\nCategory: %s\n%s", article.Id, article.Title, category, url)
+	status := "📖 Unread"
+	if article.Read {
+		status = "✅ Read"
+	}
+	return fmt.Sprintf("🔗 Article #%d) %s\nCategory: %s\nStatus: %s\n%s", article.Id, article.Title, category, status, url)
 }
 
 func (articles ArticleList) ToString() (result []string) {
@@ -268,6 +274,29 @@ func (articles ArticleList) Index(articleID uint64) int {
 	return -1
 }
 
+// addColumnIfMissing adds a column to a table when it isn't already present.
+// Used for defensive in-place migrations against older databases.
+func addColumnIfMissing(db *sql.DB, table, column, definition string) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return
+		}
+		if name == column {
+			return
+		}
+	}
+	_, _ = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
+}
+
 func InitDatabase() error {
 	db, err := sql.Open("sqlite3", DATABASE_NAME)
 	if err != nil {
@@ -281,6 +310,8 @@ func InitDatabase() error {
 	if _, err := db.Exec(CREATE_ARTICLES_TABLE_QUERY); err != nil {
 		return err
 	}
+	// Older databases predate the read flag; add it in place.
+	addColumnIfMissing(db, "articles", "read", "INTEGER NOT NULL DEFAULT 0")
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_articles_owner ON articles(owner_id)"); err != nil {
 		return err
 	}
@@ -289,7 +320,19 @@ func InitDatabase() error {
 
 // Load returns an owner's articles, newest first; categoryID == 0 means no
 // category filter.
-func Load(ownerID int64, categoryID int64) (articles ArticleList, err error) {
+func Load(ownerID int64, categoryID int64) (ArticleList, error) {
+	return load(ownerID, categoryID, false)
+}
+
+// LoadUnread returns an owner's not-yet-read articles, newest first — used by
+// the daily reminder so already-read links are never resurfaced.
+func LoadUnread(ownerID int64) (ArticleList, error) {
+	return load(ownerID, 0, true)
+}
+
+// load is the shared query worker. unreadOnly restricts results to articles the
+// user hasn't marked read yet.
+func load(ownerID int64, categoryID int64, unreadOnly bool) (articles ArticleList, err error) {
 	corruptedRows := 0
 	articles = make(ArticleList, 0)
 	err = nil
@@ -297,13 +340,16 @@ func Load(ownerID int64, categoryID int64) (articles ArticleList, err error) {
 	if db, e := sql.Open("sqlite3", DATABASE_NAME); e == nil {
 		defer db.Close()
 
-		query := `SELECT a.id, a.owner_id, a.title, a.category_id, COALESCE(c.name, ''), a.url, a.created_at
+		query := `SELECT a.id, a.owner_id, a.title, a.category_id, COALESCE(c.name, ''), a.url, a.read, a.created_at
 			FROM articles a LEFT JOIN article_categories c ON c.id = a.category_id
 			WHERE a.owner_id=?`
 		args := []interface{}{ownerID}
 		if categoryID != 0 {
 			query += " AND a.category_id=?"
 			args = append(args, categoryID)
+		}
+		if unreadOnly {
+			query += " AND a.read=0"
 		}
 		query += " ORDER BY a.created_at DESC, a.id DESC"
 
@@ -318,7 +364,7 @@ func Load(ownerID int64, categoryID int64) (articles ArticleList, err error) {
 			var article Article
 			var createdAt sql.NullTime
 
-			scanErr := rows.Scan(&article.Id, &article.OwnerId, &article.Title, &article.CategoryId, &article.Category, &article.Url, &createdAt)
+			scanErr := rows.Scan(&article.Id, &article.OwnerId, &article.Title, &article.CategoryId, &article.Category, &article.Url, &article.Read, &createdAt)
 			if scanErr != nil {
 				corruptedRows++
 				continue
@@ -341,9 +387,25 @@ func Load(ownerID int64, categoryID int64) (articles ArticleList, err error) {
 	return
 }
 
-// LoadOwnersWithArticles returns the distinct owners that have at least one
-// article — used to drive the daily article reminder tick efficiently.
-func LoadOwnersWithArticles() ([]int64, error) {
+// SetRead persists the read flag for a single article and updates the receiver.
+func (article *Article) SetRead(ownerID int64, read bool) error {
+	db, err := sql.Open("sqlite3", DATABASE_NAME)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("UPDATE articles SET read=? WHERE id=? AND owner_id=?", read, article.Id, ownerID); err != nil {
+		return err
+	}
+	article.Read = read
+	return nil
+}
+
+// LoadOwnersWithUnreadArticles returns the distinct owners that have at least
+// one unread article — used to drive the daily article reminder tick
+// efficiently (owners whose articles are all read are skipped entirely).
+func LoadOwnersWithUnreadArticles() ([]int64, error) {
 	owners := make([]int64, 0)
 	db, err := sql.Open("sqlite3", DATABASE_NAME)
 	if err != nil {
@@ -351,7 +413,7 @@ func LoadOwnersWithArticles() ([]int64, error) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT DISTINCT owner_id FROM articles")
+	rows, err := db.Query("SELECT DISTINCT owner_id FROM articles WHERE read=0")
 	if err != nil {
 		return nil, err
 	}

@@ -178,8 +178,9 @@ const (
 	ShowArticleMenuPage
 	ArticleMenuList   // render a page of the interactive article browser
 	ArticleMenuOpen   // open one article's detail card in the browser
-	ArticleMenuRemove // delete an article from the browser, return to the list
-	ArticleMenuEdit   // hand the browser message off to the manage-flow edit screens
+	ArticleMenuRemove     // delete an article from the browser, return to the list
+	ArticleMenuEdit       // hand the browser message off to the manage-flow edit screens
+	ArticleMenuToggleRead // flip an article's read flag (from the browser card or a reminder)
 	TogoMenuList      // render a page of the interactive togo browser
 	TogoMenuOpen      // open one togo's detail card in the browser
 	TogoMenuRemove    // delete a togo from the browser, return to the list
@@ -208,6 +209,7 @@ type CallbackData struct {
 	IdeaScope           int         `json:"IK,omitempty"` // idea-browser scope (all / high / favorites / category)
 	IdeaCat             int64       `json:"IC,omitempty"` // category id when the idea-browser scope is "category"
 	ArtCat              int64       `json:"AC,omitempty"` // category id filter for the article browser (0 = all)
+	ArtReminder         bool        `json:"AR,omitempty"` // toggle-read came from a daily reminder, not the browser card
 }
 
 func (callbackData CallbackData) Json() string {

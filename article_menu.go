@@ -28,13 +28,18 @@ func loadArticlesForScope(ownerID int64, categoryID int64) (Article.ArticleList,
 	return Article.Load(ownerID, categoryID)
 }
 
-// articleListLine renders one message line: "#id Category: header".
+// articleListLine renders one message line: "✅/🔗 #id Category: header", the
+// leading mark showing whether the article has been read.
 func articleListLine(article Article.Article) string {
 	category := article.Category
 	if category == "" {
 		category = "—"
 	}
-	return fmt.Sprintf("#%d %s: %s", article.Id, category, article.Header())
+	mark := "🔗"
+	if article.Read {
+		mark = "✅"
+	}
+	return fmt.Sprintf("%s #%d %s: %s", mark, article.Id, category, article.Header())
 }
 
 // articleButtonRows builds one inline button per article ("#id: header"), each
@@ -122,9 +127,11 @@ func renderArticleDetail(articles Article.ArticleList, categoryID int64, article
 
 	remove := (CallbackData{Action: ArticleMenuRemove, ID: int64(article.Id), ArtCat: categoryID, MenuPage: page}).Json()
 	edit := (CallbackData{Action: ArticleMenuEdit, ID: int64(article.Id)}).Json()
+	toggleRead := (CallbackData{Action: ArticleMenuToggleRead, ID: int64(article.Id), ArtCat: categoryID, MenuPage: page}).Json()
 	actionRow := []tgbotapi.InlineKeyboardButton{
 		{Text: "🗑 Remove", CallbackData: &remove},
 		{Text: "✏️ Edit", CallbackData: &edit},
+		{Text: readToggleLabel(article.Read), CallbackData: &toggleRead},
 	}
 
 	navRow := make([]tgbotapi.InlineKeyboardButton, 0, 3)
@@ -174,9 +181,45 @@ func (telegramBot *TelegramBotAPI) handleArticleMenuCallback(cb CallbackData, re
 		response.TextMsg = "🗑 Removed.\n\n" + text
 		response.InlineKeyboard = orEmptyKeyboard(kb)
 
+	case ArticleMenuToggleRead:
+		articles, warning := loadArticlesForScope(owner, cb.ArtCat)
+		article, err := articles.Get(uint64(cb.ID))
+		if err != nil {
+			response.TextMsg = "This article no longer exists."
+			response.InlineKeyboard = emptyInlineKeyboard()
+			return
+		}
+		if err := article.SetRead(owner, !article.Read); err != nil {
+			response.TextMsg = err.Error()
+			return
+		}
+		if cb.ArtReminder {
+			// The toggle was tapped on a daily reminder, not the browser card:
+			// keep the lightweight reminder layout (one toggle button).
+			text, kb := buildArticleReminderMessage(*article)
+			response.TextMsg = text
+			response.InlineKeyboard = kb
+			return
+		}
+		// Reload so the detail card re-renders with the flipped state/label.
+		updated, warn2 := loadArticlesForScope(owner, cb.ArtCat)
+		if warn2 == nil {
+			warn2 = warning
+		}
+		response.TextMsg, response.InlineKeyboard = articleDetailOrList(updated, cb, uint64(cb.ID), warn2)
+
 	case ArticleMenuEdit:
 		telegramBot.enterArticleEditFromMenu(owner, cb, response)
 	}
+}
+
+// readToggleLabel returns the toggle button's caption for an article's current
+// read state — tapping it moves the article to the opposite state.
+func readToggleLabel(read bool) string {
+	if read {
+		return "📕 Mark Unread"
+	}
+	return "📗 Mark Read"
 }
 
 // articleDetailOrList renders the detail view or falls back to the list, always
@@ -214,16 +257,17 @@ func (telegramBot *TelegramBotAPI) RemindArticles() {
 	}
 }
 
-// processArticleReminderTick sends every owner that has at least one article a
-// single, randomly chosen one of theirs.
+// processArticleReminderTick sends every owner that has at least one unread
+// article a single, randomly chosen one of their unread links. Read articles
+// are never resurfaced.
 func (telegramBot *TelegramBotAPI) processArticleReminderTick() {
-	owners, err := Article.LoadOwnersWithArticles()
+	owners, err := Article.LoadOwnersWithUnreadArticles()
 	if err != nil {
 		log.Println("article reminder tick: could not load owners:", err.Error())
 		return
 	}
 	for _, owner := range owners {
-		articles, loadErr := Article.Load(owner, 0)
+		articles, loadErr := Article.LoadUnread(owner)
 		if loadErr != nil {
 			log.Println("article reminder tick: load articles failed:", loadErr.Error())
 		}
@@ -235,14 +279,29 @@ func (telegramBot *TelegramBotAPI) processArticleReminderTick() {
 	}
 }
 
-// sendArticleReminder sends one article. The url sits on its own line so Telegram
-// renders its link preview (and an Instant View for supported sites). It is sent
-// as plain text (no Markdown) so urls containing _ * etc. are not mangled and the
-// preview resolves correctly.
-func (telegramBot *TelegramBotAPI) sendArticleReminder(ownerID int64, article Article.Article) {
-	text := fmt.Sprintf("🔗 An article worth revisiting:\n\n%s", article.Title)
+// buildArticleReminderMessage renders the reminder text + a single read-toggle
+// button. The url sits on its own line so Telegram renders its link preview. An
+// unread article reads "worth revisiting"; once toggled it confirms the new
+// state and offers to flip back.
+func buildArticleReminderMessage(article Article.Article) (string, *tgbotapi.InlineKeyboardMarkup) {
+	header := "🔗 An article worth revisiting:"
+	if article.Read {
+		header = "✅ Marked as read:"
+	}
+	text := fmt.Sprintf("%s\n\n%s", header, article.Title)
 	if url := article.Url; url != "" {
 		text += "\n" + url
 	}
-	telegramBot.SendTextMessageReturningID(TelegramResponse{TargetChatId: ownerID, TextMsg: text})
+	data := (CallbackData{Action: ArticleMenuToggleRead, ID: int64(article.Id), ArtReminder: true}).Json()
+	button := tgbotapi.InlineKeyboardButton{Text: readToggleLabel(article.Read), CallbackData: &data}
+	kb := tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{{button}}}
+	return text, &kb
+}
+
+// sendArticleReminder sends one article with its read-toggle button. It is sent
+// as plain text (no Markdown) so urls containing _ * etc. are not mangled and the
+// preview resolves correctly.
+func (telegramBot *TelegramBotAPI) sendArticleReminder(ownerID int64, article Article.Article) {
+	text, kb := buildArticleReminderMessage(article)
+	telegramBot.SendTextMessageReturningID(TelegramResponse{TargetChatId: ownerID, TextMsg: text, InlineKeyboard: kb})
 }

@@ -70,6 +70,66 @@ func TestArticleMenuOpenShowsDetailWithUrl(t *testing.T) {
 	}
 }
 
+func TestArticleMenuToggleReadFlipsState(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	owner := int64(9009)
+	id := seedArticle(t, owner, "Toggle me", "https://example.com/t", "Tech")
+
+	// Detail card starts with a "Mark Read" toggle and Unread status.
+	detail := sendCallbackAndGetEditedText(t, bot, transport, owner, 812,
+		(CallbackData{Action: ArticleMenuOpen, ID: int64(id)}).Json())
+	if !strings.Contains(detail, "Unread") {
+		t.Fatalf("expected fresh article to read Unread, got %q", detail)
+	}
+
+	// Tapping the toggle marks it read and re-renders the card with Read status.
+	read := sendCallbackAndGetEditedText(t, bot, transport, owner, 812,
+		(CallbackData{Action: ArticleMenuToggleRead, ID: int64(id)}).Json())
+	if !strings.Contains(read, "✅ Read") {
+		t.Fatalf("expected card to show Read after toggle, got %q", read)
+	}
+
+	articles, _ := Article.Load(owner, 0)
+	if got, _ := articles.Get(id); got == nil || !got.Read {
+		t.Fatalf("expected article persisted as read")
+	}
+
+	// Toggling again flips it back to unread.
+	sendCallbackAndGetEditedText(t, bot, transport, owner, 812,
+		(CallbackData{Action: ArticleMenuToggleRead, ID: int64(id)}).Json())
+	articles, _ = Article.Load(owner, 0)
+	if got, _ := articles.Get(id); got == nil || got.Read {
+		t.Fatalf("expected article toggled back to unread")
+	}
+}
+
+func TestArticleReminderTogglePreservesReminderLayout(t *testing.T) {
+	withTempWorkingDir(t, true)
+	bot, transport := newRecordingBot(t)
+	owner := int64(9010)
+	id := seedArticle(t, owner, "Revisit this", "https://example.com/r", "")
+
+	// The reminder message offers a single Mark Read button.
+	articles, _ := Article.Load(owner, 0)
+	a, _ := articles.Get(id)
+	text, kb := buildArticleReminderMessage(*a)
+	if !strings.Contains(text, "worth revisiting") || !strings.Contains(kbText(kb), "Mark Read") {
+		t.Fatalf("expected unread reminder with Mark Read button, got %q / %q", text, kbText(kb))
+	}
+
+	// Tapping it (ArtReminder mode) confirms read and keeps the reminder layout.
+	edited := sendCallbackAndGetEditedText(t, bot, transport, owner, 813,
+		(CallbackData{Action: ArticleMenuToggleRead, ID: int64(id), ArtReminder: true}).Json())
+	if !strings.Contains(edited, "Marked as read") {
+		t.Fatalf("expected reminder to confirm read, got %q", edited)
+	}
+	reloaded, _ := Article.Load(owner, 0)
+	if got, _ := reloaded.Get(id); got == nil || !got.Read {
+		t.Fatalf("expected article persisted as read from reminder toggle")
+	}
+}
+
 func TestArticleMenuRemoveReturnsToList(t *testing.T) {
 	withTempWorkingDir(t, true)
 	bot, transport := newRecordingBot(t)

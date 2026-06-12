@@ -1020,7 +1020,7 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 		response.InlineKeyboard = ArticleInlineKeyboardMenu(articles, callbackData.MenuAction, callbackData.MenuPage)
 		response.TextMsg = "Select an article to remove ..."
 
-	case ArticleMenuList, ArticleMenuOpen, ArticleMenuRemove, ArticleMenuEdit:
+	case ArticleMenuList, ArticleMenuOpen, ArticleMenuRemove, ArticleMenuEdit, ArticleMenuToggleRead:
 		telegramBot.handleArticleMenuCallback(callbackData, response)
 
 	case TogoMenuList, TogoMenuOpen, TogoMenuRemove, TogoMenuToggle, TogoMenuEdit:
