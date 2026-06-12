@@ -298,9 +298,9 @@ func appendWarning(text string, warning error) string {
 	return text
 }
 
-// ---------------------- Favorite-idea reminders -------------------------------
+// ---------------------- Idea reminders ----------------------------------------
 
-// ReminderStore keeps each owner's next favorite-idea reminder time in memory
+// ReminderStore keeps each owner's next idea reminder time in memory
 // (intentionally not persisted: on restart, the next tick simply recomputes a
 // time for each owner, just like guided-flow state).
 type ReminderStore struct {
@@ -342,8 +342,8 @@ func pickRandomIdeas(ideas Idea.IdeaList, n int) Idea.IdeaList {
 	return pool
 }
 
-// RemindFavoriteIdeas runs the hourly reminder tick forever.
-func (telegramBot *TelegramBotAPI) RemindFavoriteIdeas() {
+// RemindIdeas runs the hourly reminder tick forever.
+func (telegramBot *TelegramBotAPI) RemindIdeas() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {

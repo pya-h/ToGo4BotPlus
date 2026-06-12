@@ -540,7 +540,7 @@ func main() {
 	}
 
 	go bot.NotifyRightNowTogos() // run the scheduler that will check which togos are hapening right now, for each user
-	go bot.RemindFavoriteIdeas() // hourly: nudge users about a random batch of their favorite ideas
+	go bot.RemindIdeas() // hourly: nudge users about a random batch of their favorite / high-priority ideas
 	go bot.RemindArticles()      // daily at ArticleReminderHour: send each user a random saved article
 	go bot.RemindPortableTogos() // daily at 00:00: ask each user to port their undone togos to tomorrow
 	log.Println("configured.")
