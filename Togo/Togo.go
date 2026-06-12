@@ -455,6 +455,108 @@ func LoadEverybodysToday() (TogoList, error) {
 	return togos, warning
 }
 
+// StartOfToday returns 00:00 of today in Asia/Tehran. Used by the daily
+// port-reminder process as the cutoff: any togo dated before this with
+// progress < 100 is treated as "undone from the past".
+func StartOfToday() time.Time {
+	today := Today()
+	return time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
+}
+
+// LoadEverybodysUndoneBefore returns every owner's togos with progress < 100
+// dated strictly before cutoff, in (owner_id, date) order so the caller can
+// group results by owner without a second query.
+func LoadEverybodysUndoneBefore(cutoff time.Time) (TogoList, error) {
+	togos := make(TogoList, 0)
+	corruptedRows := 0
+	db, err := sql.Open("sqlite3", DATABASE_NAME)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query(
+		"SELECT id, owner_id, title, description, weight, extra, progress, date, duration FROM togos WHERE date < ? AND progress < 100 ORDER BY owner_id, date",
+		cutoff,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var togo Togo
+		var date time.Time
+		if scanErr := rows.Scan(&togo.Id, &togo.OwnerId, &togo.Title, &togo.Description, &togo.Weight, &togo.Extra, &togo.Progress, &date, &togo.Duration); scanErr != nil {
+			corruptedRows++
+			continue
+		}
+		if tz, e := time.LoadLocation("Asia/Tehran"); e == nil {
+			togo.Date = Date{date.In(tz)}
+		} else {
+			togo.Date = Date{date}
+		}
+		togo.Duration *= time.Minute
+		togos = togos.Add(&togo)
+	}
+	if err := rows.Err(); err != nil {
+		return togos, err
+	}
+
+	var warning error
+	if corruptedRows > 0 {
+		warning = errors.New(fmt.Sprint("could not read ", corruptedRows, " togos from database because some rows seem corrupted"))
+	}
+	return togos, warning
+}
+
+// LoadUndoneBefore returns one owner's togos with progress < 100 dated before
+// cutoff, ordered by date. Used by the port-reminder callback to rebuild the
+// menu after each port action.
+func LoadUndoneBefore(ownerID int64, cutoff time.Time) (TogoList, error) {
+	togos := make(TogoList, 0)
+	corruptedRows := 0
+	db, err := sql.Open("sqlite3", DATABASE_NAME)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query(
+		"SELECT id, owner_id, title, description, weight, extra, progress, date, duration FROM togos WHERE owner_id = ? AND date < ? AND progress < 100 ORDER BY date",
+		ownerID, cutoff,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var togo Togo
+		var date time.Time
+		if scanErr := rows.Scan(&togo.Id, &togo.OwnerId, &togo.Title, &togo.Description, &togo.Weight, &togo.Extra, &togo.Progress, &date, &togo.Duration); scanErr != nil {
+			corruptedRows++
+			continue
+		}
+		if tz, e := time.LoadLocation("Asia/Tehran"); e == nil {
+			togo.Date = Date{date.In(tz)}
+		} else {
+			togo.Date = Date{date}
+		}
+		togo.Duration *= time.Minute
+		togos = togos.Add(&togo)
+	}
+	if err := rows.Err(); err != nil {
+		return togos, err
+	}
+
+	var warning error
+	if corruptedRows > 0 {
+		warning = errors.New(fmt.Sprint("could not read ", corruptedRows, " togos from database because some rows seem corrupted"))
+	}
+	return togos, warning
+}
+
 func Extract(ownerId int64, terms []string) (togo Togo, err error) {
 	// Check if terms is empty
 	if len(terms) == 0 {

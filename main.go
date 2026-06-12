@@ -189,6 +189,7 @@ const (
 	TaskMenuRemove    // delete a task from the browser, return to the list
 	TaskMenuToggle    // toggle a task's done state from the browser
 	TaskMenuEdit      // hand the task-browser message off to the edit screens
+	PortTogo          // shift an undone togo's date +1 day from the midnight port-reminder
 )
 
 type CallbackData struct {
@@ -538,6 +539,7 @@ func main() {
 	go bot.NotifyRightNowTogos() // run the scheduler that will check which togos are hapening right now, for each user
 	go bot.RemindFavoriteIdeas() // hourly: nudge users about a random batch of their favorite ideas
 	go bot.RemindArticles()      // daily at ArticleReminderHour: send each user a random saved article
+	go bot.RemindPortableTogos() // daily at 00:00: ask each user to port their undone togos to tomorrow
 	log.Println("configured.")
 	for update := range updates {
 		bot.HandleUpdate(update)

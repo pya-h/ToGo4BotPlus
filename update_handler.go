@@ -1024,6 +1024,24 @@ func (telegramBot *TelegramBotAPI) handleCallbackUpdate(callbackQuery *tgbotapi.
 	case TaskMenuList, TaskMenuOpen, TaskMenuRemove, TaskMenuToggle, TaskMenuEdit:
 		telegramBot.handleTaskMenuCallback(callbackData, response)
 
+	case PortTogo:
+		// Shift the chosen togo's date by +1 day (same time, next day), then
+		// rebuild the menu with whatever undone togos remain. If nothing's left,
+		// BuildPortReminderMessage returns the success blurb + an empty keyboard.
+		cutoff := Togo.StartOfToday()
+		togos, _ := Togo.LoadUndoneBefore(response.TargetChatId, cutoff)
+		if togo, err := togos.Get(uint64(callbackData.ID)); err == nil {
+			togo.Date = Togo.Date{Time: togo.Date.AddDate(0, 0, 1)}
+			if err := togo.Update(response.TargetChatId); err != nil {
+				response.TextMsg = err.Error()
+				return
+			}
+		}
+		remaining, _ := Togo.LoadUndoneBefore(response.TargetChatId, cutoff)
+		text, kb := BuildPortReminderMessage(remaining)
+		response.TextMsg = text
+		response.InlineKeyboard = kb
+
 	default:
 		response.TextMsg = "Unsupported callback action."
 	}
