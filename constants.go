@@ -251,6 +251,7 @@ const HELP_MESSAGE = "WTF?\n```\n" +
 *   /taskreminder shows the task-reminder frequency; /taskreminder  <n> sets it
     (allowed: 0/1/2/4/6/8/12/24, 0 disables).
 *   /json exports ALL your data (togos, tasks, ideas, articles) as a JSON file.
+*   /import reads a /json file back in, adding it to your data (never overwrites).
 *   /start restarts the bot and shows the menu; /help shows this help.` + "\n```"
 
 // WELCOME_MESSAGE is shown on /start, after any in-progress guided menu is reset.

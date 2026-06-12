@@ -105,6 +105,9 @@ func (telegramBot *TelegramBotAPI) ensureFlows() {
 	if telegramBot.flows == nil {
 		telegramBot.flows = NewFlowStore()
 	}
+	if telegramBot.imports == nil {
+		telegramBot.imports = newImportWaitSet()
+	}
 }
 
 // ---------------------- Flow command parsing ----------------------------------

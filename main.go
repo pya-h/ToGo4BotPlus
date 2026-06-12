@@ -32,6 +32,7 @@ type TelegramBotAPI struct {
 	*tgbotapi.BotAPI
 	flows         *FlowStore     // in-memory guided-flow (Type B) conversation state
 	ideaReminders *ReminderStore // in-memory favorite-idea reminder schedule (per owner)
+	imports       *importWaitSet // in-memory set of owners awaiting a /import file upload
 }
 
 func (telegramBotAPI *TelegramBotAPI) SendTextMessage(response TelegramResponse) {
@@ -128,6 +129,7 @@ func (telegramBot *TelegramBotAPI) registerBotCommands() {
 		{"taskreminder", "⏰ Show/Set task reminder frequency"},
 		{"tasksperreminder", "🎲 Show/Set how many tasks per reminder (1–10)"},
 		{"json", "📦 Export all your data as a JSON file"},
+		{"import", "📥 Import data from a /json export file"},
 		{"now", "🕒 Show current date/time"},
 		{"cancel", "✖️ Cancel the current guided menu"},
 		{"help", "❓ Show the full command help"},

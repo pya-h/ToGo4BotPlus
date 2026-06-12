@@ -32,6 +32,7 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 		// menu, so a stuck conversation can always be escaped.
 		if normalizeSlashCommand(update.Message.Text) == "/start" {
 			telegramBot.flows.Clear(chatID)
+			telegramBot.imports.take(chatID) // discard any pending import-upload wait
 			telegramBot.SendTextMessage(TelegramResponse{
 				TargetChatId:     chatID,
 				MessageRepliedTo: update.Message.MessageID,
@@ -50,6 +51,27 @@ func (telegramBot *TelegramBotAPI) HandleUpdate(update tgbotapi.Update) {
 		// 0c) /json exports all user data as a downloadable JSON file.
 		if normalizeSlashCommand(update.Message.Text) == "/json" {
 			telegramBot.sendUserDataJSON(chatID, update.Message.MessageID)
+			return
+		}
+		// 0d) /import asks for an exported JSON file and arms the upload waiter.
+		if normalizeSlashCommand(update.Message.Text) == "/import" {
+			telegramBot.promptImport(chatID, update.Message.MessageID)
+			return
+		}
+		// 0e) A document upload is ingested as an import when the user asked for it
+		// (ran /import) or captioned the file /import; otherwise nudge them toward
+		// the command so unrelated files aren't silently swallowed.
+		if update.Message.Document != nil {
+			armed := telegramBot.imports.take(chatID)
+			if armed || normalizeSlashCommand(update.Message.Caption) == "/import" {
+				telegramBot.handleImportDocument(chatID, update.Message.Document, update.Message.MessageID)
+			} else {
+				telegramBot.SendTextMessage(TelegramResponse{
+					TargetChatId:     chatID,
+					MessageRepliedTo: update.Message.MessageID,
+					TextMsg:          "📎 To import data, send /import first and then upload the file (or attach the file with the caption /import).",
+				})
+			}
 			return
 		}
 		// 1) A guided-flow slash command (/addIdea, /cancel, ...) takes priority.
